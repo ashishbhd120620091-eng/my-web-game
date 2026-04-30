@@ -816,7 +816,6 @@ const Obstacles = memo(function Obstacles({
       // High-precision hitboxes
       let hitDx = 0.65; 
       let hitDz = 1.0;
-      let hitDy = 1.5;
       
       if (o.type === "train") {
         hitDx = 0.85;
@@ -1826,7 +1825,6 @@ function UIStyles() {
 
 function ModernHUD({
   score,
-  totalCoins,
   runCoins,
   paused,
   onTogglePause,
@@ -1840,7 +1838,6 @@ function ModernHUD({
   hoverboardActive = false,
 }) {
 
-  const coins = Math.max(0, Math.floor(totalCoins || 0));
   const comboBumpKey = useRef(0);
   const prevCombo = useRef(combo);
   if (combo !== prevCombo.current && combo > 0) {
@@ -2289,7 +2286,6 @@ export default function App() {
   const magnetTimerRef = useRef(null);
   const shieldTimerRef = useRef(null);
 
-  const [showLevelComplete, setShowLevelComplete] = useState(false);
 
   // ---------------- SHOP & COINS ----------------
   const coinsRef = useRef(0);
@@ -3192,7 +3188,6 @@ export default function App() {
         <>
           <ModernHUD
             score={score}
-            totalCoins={coinsTotal}
             runCoins={runCoins}
             paused={paused}
             onTogglePause={() => setPaused((p) => !p)}
@@ -3219,14 +3214,7 @@ export default function App() {
       )}
 
 
-      {showLevelComplete && !paused && !gameOver && (
-        <div className="level-toast" aria-hidden>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
-            <div style={{ fontSize: 16, color: "#fff", fontWeight: 900 }}>LEVEL {levelRef.current - 1} COMPLETE</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.86)", fontWeight: 700 }}>Advancing...</div>
-          </div>
-        </div>
-      )}
+
 
       <GameOverOverlay
         gameOver={gameOver}
