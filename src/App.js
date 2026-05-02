@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import React, { useEffect, useRef, useState, useMemo, memo, useCallback, createContext, useContext } from "react";
+import { useMissionEventSystem, useMysteryBoxSystem } from "./MissionSystem";
 
 const LANES = [-2, 0, 2];
 
@@ -21,30 +22,38 @@ const Character = memo(function Character({
   const swing = useRef(0);
 
   // tuned physics (higher jump, smoother gravity/airtime)
-  const GRAVITY = 22; // units/s^2 (smoothed)
-  const JUMP_V = 9.4; // stronger initial jump velocity
-  const FORCE_FALL_V = -10; // clamp downwards to force landing
-  const FORCE_FALL_S = 0.82; // seconds to force fall (longer airtime)
+  const GRAVITY = 28; // Increased for snappier fall
+  const JUMP_V = 10.5; // Stronger initial jump
+  const FORCE_FALL_V = -12;
+  const FORCE_FALL_S = 0.75; 
 
   useFrame((state, delta) => {
     if (!ref.current || gameOver) return;
 
-    // snappy smooth lane follow
+    // Snappier lane follow with a slight overshoot/spring feel
     const laneIndex = laneRef?.current ?? 1;
     const targetX = LANES[laneIndex] ?? 0;
-    const moveFactor = 1 - Math.exp(-30 * delta); // instant lane response
+    const moveFactor = 1 - Math.exp(-35 * delta); 
+    
+    const prevX = ref.current.position.x;
     ref.current.position.x += (targetX - ref.current.position.x) * moveFactor;
 
-    // Add tilt effect when switching lanes
-    const currentVelocityX = (targetX - ref.current.position.x) * 30;
-    ref.current.rotation.z = -currentVelocityX * 0.015;
+    // Add tilt and roll effect when switching lanes
+    const currentVelocityX = (ref.current.position.x - prevX) / delta;
+    ref.current.rotation.z = THREE.MathUtils.lerp(ref.current.rotation.z, -currentVelocityX * 0.015, 0.15);
+    ref.current.rotation.y = THREE.MathUtils.lerp(ref.current.rotation.y, currentVelocityX * 0.008, 0.15);
 
-    // forward motion - keep the same "per-second" behavior as before
+    // Subtle side-to-side sway when running on ground
+    if (ref.current.position.y <= 0.505) {
+      ref.current.position.x += Math.sin(state.clock.elapsedTime * 8) * 0.01;
+    }
+
+    // forward motion
     ref.current.position.z -= (speedRef.current || 0) * delta * 60;
 
     const nowS = performance.now() / 1000;
 
-    // jump - consume jump request immediately
+    // jump
     if (jumpRef?.current) {
       if (ref.current.position.y <= 0.505) {
         vel.current = JUMP_V;
@@ -53,12 +62,12 @@ const Character = memo(function Character({
       jumpRef.current = false;
     }
 
-    // gravity integration (frame-rate independent, smoothed)
-    const gravityMul = vel.current > 0 ? 0.92 : 1.6; // slower up, faster down
+    // gravity integration
+    const gravityMul = vel.current > 0 ? 0.85 : 1.8; // Snappier peak and fall
     vel.current -= GRAVITY * gravityMul * delta;
     ref.current.position.y += vel.current * delta;
 
-    // force landing after fixed time window to avoid floatiness
+    // force landing
     if (jumpStartRef?.current && nowS - jumpStartRef.current > FORCE_FALL_S) {
       if (vel.current > FORCE_FALL_V) {
         vel.current = Math.min(vel.current, FORCE_FALL_V);
@@ -72,10 +81,10 @@ const Character = memo(function Character({
       if (jumpStartRef) jumpStartRef.current = 0;
     }
 
-    // sliding/crouch visual smooth lerp (frame-rate independent)
-    const sliding = slideRef?.current && (nowS - slideRef.current < 0.6);
-    const targetScaleY = sliding ? 0.45 : 1;
-    const slideLerp = 1 - Math.exp(-30 * delta); // instantly responsive
+    // sliding visual
+    const sliding = slideRef?.current && (nowS - slideRef.current < 0.65);
+    const targetScaleY = sliding ? 0.4 : 1;
+    const slideLerp = 1 - Math.exp(-25 * delta); 
     ref.current.scale.y += (targetScaleY - ref.current.scale.y) * slideLerp;
 
     // limb swing (time-based, scaled by speed but clamped)
@@ -188,21 +197,21 @@ const CameraFollow = memo(function CameraFollow({ playerRef, speedRef, crashFxRe
     const baseY = playerRef.current.y + 3.2;
     const baseZ = playerRef.current.z + 6.2;
 
-    const swayStrength = Math.min(0.08, Math.max(0.015, (speedRef?.current || 0.28) * 0.05));
-    const swayX = Math.sin(state.clock.elapsedTime * 1.8) * swayStrength;
-    const swayY = Math.sin(state.clock.elapsedTime * 2.6) * swayStrength * 0.6;
+    // Removed sway for a more stable feel
+    const swayX = 0;
+    const swayY = 0;
 
     const crashFx = crashFxRef?.current || 0;
-    // Enhanced screen shake
-    const shake = crashFx > 0 ? crashFx * 0.6 : 0;
+    // Reduced screen shake
+    const shake = crashFx > 0 ? crashFx * 0.3 : 0;
     const shakeX = (Math.random() - 0.5) * shake;
     const shakeY = (Math.random() - 0.5) * shake;
     const shakeZ = (Math.random() - 0.5) * shake * 0.5;
 
     // Camera follows player x slightly so it feels more dynamic
-    posTarget.current.set(playerRef.current.x * 0.6 + swayX + shakeX, baseY + swayY + shakeY, baseZ + shakeZ);
+    posTarget.current.set(playerRef.current.x * 0.4 + swayX + shakeX, baseY + swayY + shakeY, baseZ + shakeZ);
 
-    const lerpFactor = 1 - Math.exp(-10 * delta); // Faster camera follow
+    const lerpFactor = 1 - Math.exp(-8 * delta); // Smoother camera follow
     camera.position.lerp(posTarget.current, lerpFactor);
 
     lookTarget.current.set(playerRef.current.x, playerRef.current.y + 1.1, playerRef.current.z - 5.5);
@@ -231,13 +240,13 @@ const THEMES = [
     preview: "#38bdf8"
   },
   {
-    id: "sunset", name: "Neon Sunset",
-    bg: "linear-gradient(#f43f5e, #fbbf24)", fog: "#fbbf24",
-    floor0: "#e11d48", floor1: "#fbbf24",
-    wall0: "#be123c", wall1: "#f59e0b",
-    trimA0: "#fff", trimA1: "#fde68a", trimA2: "#fca5a5",
-    trimB0: "#fb7185", trimB1: "#facc15",
-    preview: "#f43f5e"
+    id: "subway", name: "Subway Tunnel",
+    bg: "linear-gradient(#1a1a1a, #000000)", fog: "#000000",
+    floor0: "#262626", floor1: "#171717",
+    wall0: "#404040", wall1: "#262626",
+    trimA0: "#fbbf24", trimA1: "#d97706", trimA2: "#78350f",
+    trimB0: "#ea580c", trimB1: "#9a3412",
+    preview: "#fbbf24"
   },
   {
     id: "desert", name: "Sahara Gold",
@@ -247,77 +256,213 @@ const THEMES = [
     trimA0: "#ef4444", trimA1: "#fb923c", trimA2: "#fcd34d",
     trimB0: "#f97316", trimB1: "#f59e0b",
     preview: "#fcd34d"
+  },
+  {
+    id: "snow", name: "Snowy Peak",
+    bg: "linear-gradient(#bae6fd, #e0f2fe)", fog: "#e0f2fe",
+    floor0: "#f8fafc", floor1: "#f1f5f9",
+    wall0: "#e2e8f0", wall1: "#cbd5e1",
+    trimA0: "#0ea5e9", trimA1: "#38bdf8", trimA2: "#7dd3fc",
+    trimB0: "#0284c7", trimB1: "#0369a1",
+    preview: "#0ea5e9"
+  },
+  {
+    id: "night", name: "Midnight Ride",
+    bg: "linear-gradient(#020617, #0f172a)", fog: "#020617",
+    floor0: "#0f172a", floor1: "#020617",
+    wall0: "#1e293b", wall1: "#0f172a",
+    trimA0: "#a855f7", trimA1: "#d946ef", trimA2: "#8b5cf6",
+    trimB0: "#7c3aed", trimB1: "#6366f1",
+    preview: "#a855f7"
   }
 ];
 
 // ---------------- BACKGROUND ANIMATIONS (Subway style) ----------------
-const BackgroundAnimations = memo(function BackgroundAnimations({ theme }) {
+const BackgroundAnimations = memo(function BackgroundAnimations({ theme, speedRef, playerRef, gameOver }) {
   const birds = useRef(Array.from({ length: 4 }, () => ({
-    x: (Math.random() - 0.5) * 30,
+    x: (Math.random() - 0.5) * 40,
     y: 8 + Math.random() * 6,
-    z: -30 - Math.random() * 60,
-    speed: 0.05 + Math.random() * 0.1,
+    z: -30 - Math.random() * 100,
+    speed: 0.1 + Math.random() * 0.15,
     offset: Math.random() * Math.PI * 2
   })));
 
+  const clouds = useRef(Array.from({ length: 6 }, () => ({
+    x: (Math.random() - 0.5) * 100,
+    y: 15 + Math.random() * 10,
+    z: -50 - Math.random() * 200,
+    scale: 2 + Math.random() * 4,
+    speed: 0.05 + Math.random() * 0.05
+  })));
+
   const groupRef = useRef();
+  const cloudsRef = useRef();
 
   useFrame((state, delta) => {
-    if (!groupRef.current) return;
+    if (!groupRef.current || gameOver) return;
+    const currentSpeed = speedRef?.current || 0.28;
+    const pz = playerRef?.current?.z || 0;
+
     birds.current.forEach((b, i) => {
-      b.z += b.speed * 20 * delta;
-      if (b.z > 20) b.z = -80;
+      b.z += (b.speed * 30 + currentSpeed * 20) * delta;
+      if (b.z > pz + 20) b.z = pz - 120;
       b.y += Math.sin(state.clock.elapsedTime * 2 + b.offset) * 0.01;
       const child = groupRef.current.children[i];
       if (child) child.position.set(b.x, b.y, b.z);
     });
+
+    if (cloudsRef.current) {
+      clouds.current.forEach((c, i) => {
+        c.z += (c.speed * 10 + currentSpeed * 5) * delta;
+        if (c.z > pz + 50) c.z = pz - 250;
+        const child = cloudsRef.current.children[i];
+        if (child) child.position.set(c.x, c.y, c.z);
+      });
+    }
   });
 
   return (
-    <group ref={groupRef}>
-      {/* Flying Birds */}
-      {birds.current.map((_, i) => (
-        <group key={i}>
-          <mesh castShadow>
-            <boxGeometry args={[0.4, 0.05, 0.2]} />
-            <meshStandardMaterial color="#334155" />
-          </mesh>
-          <mesh position={[0.2, 0.1, 0]} rotation={[0, 0, Math.sin(Date.now() * 0.01) * 0.5]}>
-            <boxGeometry args={[0.3, 0.02, 0.15]} />
-            <meshStandardMaterial color="#334155" />
-          </mesh>
-          <mesh position={[-0.2, 0.1, 0]} rotation={[0, 0, -Math.sin(Date.now() * 0.01) * 0.5]}>
-            <boxGeometry args={[0.3, 0.02, 0.15]} />
-            <meshStandardMaterial color="#334155" />
-          </mesh>
-        </group>
-      ))}
-      
-      {/* Sun Rays / Light Streaks */}
-      <group position={[10, 15, -40]}>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <mesh key={i} rotation={[0, 0, 0.4]} position={[i * 2, 0, 0]}>
-            <planeGeometry args={[0.5, 40]} />
-            <meshBasicMaterial color="#fff" transparent opacity={0.05} />
+    <group>
+      <group ref={groupRef}>
+        {birds.current.map((_, i) => (
+          <group key={i}>
+            <mesh castShadow>
+              <boxGeometry args={[0.4, 0.05, 0.2]} />
+              <meshStandardMaterial color={theme.id === 'night' ? "#1e293b" : "#334155"} />
+            </mesh>
+            <mesh position={[0.2, 0.05, 0]} rotation={[0, 0, 0.5]}>
+              <boxGeometry args={[0.3, 0.02, 0.15]} />
+              <meshStandardMaterial color={theme.id === 'night' ? "#1e293b" : "#334155"} />
+            </mesh>
+            <mesh position={[-0.2, 0.05, 0]} rotation={[0, 0, -0.5]}>
+              <boxGeometry args={[0.3, 0.02, 0.15]} />
+              <meshStandardMaterial color={theme.id === 'night' ? "#1e293b" : "#334155"} />
+            </mesh>
+          </group>
+        ))}
+      </group>
+
+      <group ref={cloudsRef}>
+        {clouds.current.map((c, i) => (
+          <mesh key={i} position={[c.x, c.y, c.z]}>
+            <sphereGeometry args={[c.scale, 8, 8]} />
+            <meshStandardMaterial 
+              color={theme.id === 'night' ? "#1e293b" : "#fff"} 
+              transparent 
+              opacity={theme.id === 'night' ? 0.2 : 0.4} 
+              flatShading 
+            />
           </mesh>
         ))}
       </group>
+      
+      <group position={[20, 20, -60]}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <mesh key={i} rotation={[0, 0, 0.4]} position={[i * 3, 0, 0]}>
+            <planeGeometry args={[1, 60]} />
+            <meshBasicMaterial 
+              color={theme.id === 'night' ? "#a855f7" : theme.id === 'desert' ? "#fbbf24" : "#fff"} 
+              transparent 
+              opacity={0.05} 
+            />
+          </mesh>
+        ))}
+      </group>
+
+      {theme.id === 'snow' && <SnowParticles playerRef={playerRef} gameOver={gameOver} />}
+      <ParallaxScenery theme={theme} playerRef={playerRef} speedRef={speedRef} gameOver={gameOver} />
+    </group>
+  );
+});
+
+const ParallaxScenery = memo(function ParallaxScenery({ theme, playerRef, speedRef, gameOver }) {
+  const items = useRef(Array.from({ length: 12 }, (_, i) => ({
+    x: i % 2 === 0 ? -12 - Math.random() * 10 : 12 + Math.random() * 10,
+    z: -i * 30,
+    scaleY: 5 + Math.random() * 15,
+    type: Math.random() > 0.5 ? 'building' : 'tree'
+  })));
+  const ref = useRef();
+
+  useFrame((state, delta) => {
+    if (!ref.current || !playerRef.current || gameOver) return;
+    const pz = playerRef.current.z;
+    const spd = speedRef.current || 0.28;
+
+    items.current.forEach((item, i) => {
+      if (item.z > pz + 60) {
+        item.z = pz - 300;
+        item.x = i % 2 === 0 ? -15 - Math.random() * 20 : 15 + Math.random() * 20;
+      }
+      
+      const child = ref.current.children[i];
+      if (child) {
+        child.position.set(item.x, item.scaleY / 2, item.z);
+      }
+    });
+  });
+
+  return (
+    <group ref={ref}>
+      {items.current.map((item, i) => (
+        <mesh key={i} castShadow receiveShadow>
+          <boxGeometry args={[4, item.scaleY, 4]} />
+          <meshStandardMaterial color={i % 2 ? theme.wall0 : theme.wall1} />
+        </mesh>
+      ))}
+    </group>
+  );
+});
+
+const SnowParticles = memo(function SnowParticles({ playerRef, gameOver }) {
+  const particles = useRef(Array.from({ length: 50 }, () => ({
+    x: (Math.random() - 0.5) * 30,
+    y: Math.random() * 15,
+    z: -Math.random() * 100,
+    speed: 1 + Math.random() * 2
+  })));
+  const ref = useRef();
+
+  useFrame((state, delta) => {
+    if (!ref.current || gameOver) return;
+    const pz = playerRef?.current?.z || 0;
+    particles.current.forEach((p, i) => {
+      p.y -= p.speed * delta;
+      p.x += Math.sin(state.clock.elapsedTime + i) * 0.02;
+      if (p.y < 0) {
+        p.y = 15;
+        p.z = pz - Math.random() * 100;
+      }
+      const child = ref.current.children[i];
+      if (child) child.position.set(p.x, p.y, p.z);
+    });
+  });
+
+  return (
+    <group ref={ref}>
+      {particles.current.map((_, i) => (
+        <mesh key={i}>
+          <sphereGeometry args={[0.05, 4, 4]} />
+          <meshBasicMaterial color="#fff" transparent opacity={0.6} />
+        </mesh>
+      ))}
     </group>
   );
 });
 
 
 // ---------------- TRACK & ENVIRONMENT (colorful walls) ----------------
-const Track = memo(function Track({ playerRef, theme }) {
-  const tiles = useRef(Array.from({ length: 20 }, (_, i) => ({ z: -i * 18 })));
+const Track = memo(function Track({ playerRef, theme, gameOver }) {
+  const tiles = useRef(Array.from({ length: 24 }, (_, i) => ({ z: -i * 18 })));
   const groupRefs = useRef([]);
   const neonRefs = useRef([]);
+  const archesRef = useRef([]);
 
   useFrame((state, delta) => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || gameOver) return;
     const pz = playerRef.current.z;
     tiles.current.forEach((t, i) => {
-      if (t.z > pz + 26) t.z -= 20 * 18;
+      if (t.z > pz + 36) t.z -= 24 * 18;
       const g = groupRefs.current[i];
       if (g) g.position.set(0, 0, t.z);
     });
@@ -335,45 +480,60 @@ const Track = memo(function Track({ playerRef, theme }) {
     <>
       {tiles.current.map((t, i) => (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)} position={[0, 0, t.z]}>
+          {/* Floor */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
             <planeGeometry args={[14, 18]} />
             <meshStandardMaterial color={i % 2 ? theme.floor1 : theme.floor0} />
           </mesh>
 
-          {/* left wall panel */}
-          <group position={[-6.4, 1.6, 0]}>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[0.4, 3.4, 18]} />
-              <meshStandardMaterial color={i % 2 ? theme.wall1 : theme.wall0} />
-            </mesh>
-            {/* Animated Neon Bar */}
-            <mesh position={[0.45, 0.8, 0]} ref={el => neonRefs.current[i * 2] = el}>
-              <boxGeometry args={[0.05, 0.4, 18]} />
-              <meshStandardMaterial color={theme.trimA0} emissive={theme.trimA0} emissiveIntensity={1} />
-            </mesh>
-          </group>
+          {/* Side Walls */}
+          {theme.id !== 'subway' ? (
+            <>
+              <group position={[-6.4, 1.8, 0]}>
+                <mesh>
+                  <boxGeometry args={[0.4, 3.6, 18]} />
+                  <meshStandardMaterial color={i % 2 ? theme.wall1 : theme.wall0} />
+                </mesh>
+                <mesh position={[0.45, 1.2, 0]} ref={el => neonRefs.current[i * 2] = el}>
+                  <boxGeometry args={[0.05, 0.4, 18]} />
+                  <meshStandardMaterial color={theme.trimA0} emissive={theme.trimA0} emissiveIntensity={1} />
+                </mesh>
+              </group>
+              <group position={[6.4, 1.8, 0]}>
+                <mesh>
+                  <boxGeometry args={[0.4, 3.6, 18]} />
+                  <meshStandardMaterial color={i % 2 ? theme.wall1 : theme.wall0} />
+                </mesh>
+                <mesh position={[-0.45, 1.2, 0]} ref={el => neonRefs.current[i * 2 + 1] = el}>
+                  <boxGeometry args={[0.05, 0.4, 18]} />
+                  <meshStandardMaterial color={theme.trimA1} emissive={theme.trimA1} emissiveIntensity={1} />
+                </mesh>
+              </group>
+            </>
+          ) : (
+            /* Subway Tunnel Style */
+            <group>
+              <mesh position={[0, 3.5, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[7, 7, 18, 12, 1, true, Math.PI, Math.PI]} />
+                <meshStandardMaterial color={theme.wall0} side={THREE.BackSide} />
+              </mesh>
+              {i % 3 === 0 && (
+                <mesh position={[0, 3.5, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                  <torusGeometry args={[6.9, 0.15, 8, 24]} />
+                  <meshStandardMaterial color={theme.trimA0} emissive={theme.trimA0} emissiveIntensity={1} />
+                </mesh>
+              )}
+            </group>
+          )}
 
-          {/* right wall panel */}
-          <group position={[6.4, 1.6, 0]}>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[0.4, 3.4, 18]} />
-              <meshStandardMaterial color={i % 2 ? theme.wall1 : theme.wall0} />
-            </mesh>
-            {/* Animated Neon Bar */}
-            <mesh position={[-0.45, 0.8, 0]} ref={el => neonRefs.current[i * 2 + 1] = el}>
-              <boxGeometry args={[0.05, 0.4, 18]} />
-              <meshStandardMaterial color={theme.trimA1} emissive={theme.trimA1} emissiveIntensity={1} />
-            </mesh>
-          </group>
-
-          {/* Ground side lights (disco feel) */}
-          <mesh position={[-5.8, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          {/* Ground Detail Lights */}
+          <mesh position={[-5.8, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[0.4, 1]} />
-            <meshStandardMaterial color={i % 3 === 0 ? theme.trimA0 : theme.trimA2} emissive={i % 3 === 0 ? theme.trimA0 : theme.trimA2} emissiveIntensity={0.8} />
+            <meshStandardMaterial color={theme.trimA0} emissive={theme.trimA0} emissiveIntensity={0.8} transparent opacity={0.6} />
           </mesh>
-          <mesh position={[5.8, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <mesh position={[5.8, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[0.4, 1]} />
-            <meshStandardMaterial color={i % 3 === 1 ? theme.trimB0 : theme.trimA1} emissive={i % 3 === 1 ? theme.trimB0 : theme.trimA1} emissiveIntensity={0.8} />
+            <meshStandardMaterial color={theme.trimB0} emissive={theme.trimB0} emissiveIntensity={0.8} transparent opacity={0.6} />
           </mesh>
         </group>
       ))}
@@ -592,105 +752,144 @@ function useSpawnText() {
 }
 
 // ---------------- COINS ----------------
-const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoinRef, magnet, speedRef, doubleActive }) {
+const COIN_PATTERNS = {
+  STRAIGHT: 0,
+  ARC: 1,
+  LOW: 2,
+};
+
+const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoinRef, magnet, speedRef, doubleActive, obstaclesRef, gameOver }) {
   const coins = useRef(
-    Array.from({ length: 8 }, () => ({
-      x: LANES[Math.floor(Math.random() * 3)],
-      z: -Math.random() * 360 - 40,
+    Array.from({ length: 48 }, () => ({
+      x: 0,
+      z: -999,
+      y: 0.82,
       rot: Math.random() * Math.PI * 2,
+      inCluster: false,
+      clusterId: -1,
+      clusterOffset: 0,
     }))
   );
 
   const groupRefs = useRef([]);
-  // Scale-pulse animation state per coin (ref to avoid re-renders)
   const coinScaleRefs = useRef(coins.current.map(() => ({ s: 1, t: 0 })));
+  const nextClusterIdRef = useRef(0);
+  const usedClusterObsRef = useRef(new Set());
 
   useFrame((state, delta) => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || gameOver) return;
     const speed = speedRef.current ?? 0.28;
     const pz = playerRef.current.z;
 
     coins.current.forEach((c, i) => {
-      // magnet attraction (smoothed)
-      if (magnet && Math.abs(c.z - pz) < 8) {
-        c.x += (playerRef.current.x - c.x) * 0.18;
-        c.z += (playerRef.current.z - c.z) * 0.18;
+      if (magnet && Math.abs(c.z - pz) < 10) {
+        c.x += (playerRef.current.x - c.x) * 0.22;
+        c.z += (playerRef.current.z - c.z) * 0.22;
+        c.y += (playerRef.current.y + 0.5 - c.y) * 0.22;
       }
 
       const dx = Math.abs(c.x - playerRef.current.x);
+      const dy = Math.abs(c.y - playerRef.current.y - 0.5);
       const dz = Math.abs(c.z - pz);
 
-      // rotate coin (frame-rate independent)
-      const rotSpeed = 0.06 + Math.max(0, (Math.abs(speed) - 0.28) * 0.02);
-      c.rot += rotSpeed * Math.min(1, 60 * delta);
+      c.rot += (0.06 + Math.max(0, (Math.abs(speed) - 0.28) * 0.02)) * Math.min(1, 60 * delta);
 
-      if (dx < 0.9 && dz < 0.9) {
+      if (dx < 0.9 && dz < 0.9 && dy < 0.9) {
         playCoinRef?.current && playCoinRef.current();
         addScoreRef?.current && addScoreRef.current(doubleActive ? 20 : 10, "coin");
         addCoinsRef?.current && addCoinsRef.current(1);
-        // Trigger scale-pulse on collected coin
         if (coinScaleRefs.current[i]) coinScaleRefs.current[i] = { s: 1.9, t: 1 };
-        const prev = coins.current[i > 0 ? i - 1 : coins.current.length - 1];
-        if (Math.random() < 0.25 && prev.z < pz - 80) {
-          c.z = prev.z - 4;
-          c.x = prev.x;
-        } else {
-          c.z = pz - (160 + Math.random() * 160);
-          c.x = LANES[Math.floor(Math.random() * 3)];
-        }
+        respawnCoin(c);
       }
 
-      // Animate coin scale-pulse (collect bounce effect)
       const cs = coinScaleRefs.current[i];
       if (cs && cs.t > 0) {
         cs.t = Math.max(0, cs.t - delta * 5.5);
-        // ease-out bounce: start big, spring back to 1
         cs.s = 1 + (cs.s - 1) * (1 - Math.pow(1 - cs.t, 2));
       }
 
-      if (c.z > pz + 26) {
-        const prev = coins.current[i > 0 ? i - 1 : coins.current.length - 1];
-        if (Math.random() < 0.25 && prev.z < pz - 80) {
-          // cluster with prev
-          c.z = prev.z - 4;
-          c.x = prev.x;
-        } else {
-          c.z = pz - (160 + Math.random() * 160);
-          c.x = LANES[Math.floor(Math.random() * 3)];
-        }
-      }
+      if (c.z > pz + 26) respawnCoin(c);
 
       const g = groupRefs.current[i];
       if (g) {
-        g.position.set(c.x, 0.82, c.z);
+        g.position.set(c.x, c.y, c.z);
         g.rotation.set(0, c.rot, 0);
-        // Apply scale-pulse (uniform scale for collect feedback)
-        const sc = coinScaleRefs.current[i]?.s ?? 1;
-        g.scale.setScalar(sc);
+        g.scale.setScalar(coinScaleRefs.current[i]?.s ?? 1);
       }
     });
   });
+
+  function spawnCoinCluster(anchorObs) {
+    const patternRoll = Math.random();
+    let pattern;
+    if (anchorObs.type === "jump") pattern = COIN_PATTERNS.ARC;
+    else if (anchorObs.type === "slide") pattern = COIN_PATTERNS.LOW;
+    else pattern = patternRoll < 0.5 ? COIN_PATTERNS.STRAIGHT : COIN_PATTERNS.ARC;
+
+    const clusterId = nextClusterIdRef.current++;
+    const clusterSize = pattern === COIN_PATTERNS.STRAIGHT ? 5 : 7;
+    let placed = 0;
+
+    for (let i = 0; i < coins.current.length && placed < clusterSize; i++) {
+      const c = coins.current[i];
+      if (c.z > playerRef.current.z - 30) continue;
+      if (c.inCluster) continue;
+
+      c.inCluster = true;
+      c.clusterId = clusterId;
+      c.clusterOffset = placed;
+      placed++;
+
+      c.z = anchorObs.z - (placed * 0.9);
+
+      if (pattern === COIN_PATTERNS.STRAIGHT) {
+        c.x = anchorObs.x;
+        c.y = 0.82;
+      } else if (pattern === COIN_PATTERNS.ARC) {
+        const t = (placed - 3) / 3;
+        c.x = anchorObs.x + Math.sin(t * Math.PI) * 0.6;
+        c.y = 1.2 + Math.sin(t * Math.PI) * 0.8;
+      } else {
+        c.x = anchorObs.x + (placed - 3) * 0.4;
+        c.y = 0.4 + Math.abs(placed - 3) * 0.1;
+      }
+    }
+  }
+
+  function respawnCoin(c) {
+    const pz = playerRef.current ? playerRef.current.z : 0;
+    const idx = coins.current.indexOf(c);
+
+    if (obstaclesRef && obstaclesRef.current) {
+      const obsAhead = obstaclesRef.current.filter(o => o.z < pz - 25 && !usedClusterObsRef.current.has(o));
+      if (obsAhead.length > 0 && Math.random() < 0.7) {
+        const targetObs = obsAhead[Math.floor(Math.random() * obsAhead.length)];
+        usedClusterObsRef.current.add(targetObs);
+        c.inCluster = false;
+        c.clusterId = -1;
+        spawnCoinCluster(targetObs);
+        return;
+      }
+    }
+
+    c.inCluster = false;
+    c.clusterId = -1;
+    usedClusterObsRef.current.clear();
+
+    c.z = pz - (80 + Math.random() * 120);
+    c.x = LANES[Math.floor(Math.random() * 3)];
+    c.y = 0.82;
+  }
 
   return coins.current.map((c, i) => (
     <group
       key={i}
       ref={(el) => (groupRefs.current[i] = el)}
-      position={[c.x, 0.82, c.z]}
-      rotation={[0, c.rot, 0]}
+      position={[c.x, c.y, c.z]}
     >
       <mesh>
         <torusGeometry args={[0.28, 0.08, 12, 20]} />
-        <meshStandardMaterial
-          color="#f6c85f"
-          metalness={0.85}
-          roughness={0.25}
-          emissive="#fff2bf"
-          emissiveIntensity={doubleActive ? 0.6 : 0.2}
-        />
-      </mesh>
-      <mesh position={[0.14, 0.06, 0]}>
-        <sphereGeometry args={[0.03, 8, 8]} />
-        <meshStandardMaterial color="#fff6e5" emissive="#fff6e5" emissiveIntensity={doubleActive ? 1.1 : 0.6} />
+        <meshStandardMaterial color="#f6c85f" metalness={0.85} roughness={0.25} emissive="#fff2bf" emissiveIntensity={doubleActive ? 0.6 : 0.2} />
       </mesh>
     </group>
   ));
@@ -699,6 +898,7 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
 // ---------------- OBSTACLES (SMART PATTERNED) ----------------
 const Obstacles = memo(function Obstacles({
   playerRef,
+  gameOver,
   setGameOver,
   playFallRef,
   shield,
@@ -714,112 +914,92 @@ const Obstacles = memo(function Obstacles({
   crashFxRef,
   missionRef,
   finalizeMissionCompletion,
+  obstaclesRef, // Shared ref
 }) {
-  // Reworked types: barrier (jump), tunnel (slide), wall (change lane), train (big change lane)
-  const obs = useRef(Array.from({ length: 12 }, () => ({ x: 0, z: 0, type: "barrier" })));
+  // Types: jump (barrier), slide (tunnel), lane (train/wall)
+  const obs = obstaclesRef;
   const crashPendingRef = useRef(false);
-
 
   const patternQueueRef = useRef([]);
   const patternIndexRef = useRef(0);
-  const storedLevelRef = useRef(Math.max(1, levelRef?.current || 1));
   const groupRefs = useRef([]);
 
-  // Near-miss tracking (refs to avoid re-renders)
-  const nearMissedRef = useRef(Array.from({ length: obs.current.length }, () => false));
-  const lastNearMissAtRef = useRef(0); // seconds
+  const nearMissedRef = useRef([]);
+  useEffect(() => {
+    nearMissedRef.current = new Array(obs.current.length).fill(false);
+  }, [obs.current.length]);
+
+  useEffect(() => {
+    if (!gameOver) {
+      crashPendingRef.current = false;
+    }
+  }, [gameOver]);
+
+  const lastNearMissAtRef = useRef(0);
   const nearSlowMoActiveRef = useRef(false);
 
-  // Tunable thresholds / cooldown
-  const NEAR_MISS_COOLDOWN = 0.3; // seconds
+  const NEAR_MISS_COOLDOWN = 0.3;
   const NEAR_MISS_DZ = 2.2;
   const NEAR_MISS_DX = 1.6;
 
   function triggerCrash() {
-    if (crashPendingRef.current) return;
+    if (crashPendingRef.current || gameOver) return;
     crashPendingRef.current = true;
-    playFallRef?.current && playFallRef.current();
+    if (playFallRef.current) {
+      try { playFallRef.current(); } catch (e) {}
+    }
     onCrash && onCrash();
     setGameOver(true);
-    crashPendingRef.current = false;
   }
 
-  // FIX 3 & 5: Smart obstacle pattern generator
-  // - Scales complexity with level (more obstacle variety at higher levels)
-  // - NEVER creates impossible patterns (always one free lane)
-  // - Enforces minimum spacing between hard obstacles
-  // - Mixes easy + hard patterns with controlled randomness
   function generatePattern() {
     const steps = [];
-    const types = ["barrier", "tunnel", "wall", "train"];
-    const length = 40;
+    const types = ["jump", "slide", "lane", "lane"];
+    const length = 60;
 
-    let i = 0;
-    while (i < length) {
-      const r = Math.random();
+    for (let i = 0; i < length; i++) {
+      const type = types[Math.floor(Math.random() * types.length)];
+      const lane = Math.floor(Math.random() * 3);
       
-      // Combo Patterns (Sequential)
-      if (r > 0.85 && i < length - 2) {
-        const lane = Math.floor(Math.random() * 3);
-        if (Math.random() > 0.5) {
-          // jump -> slide
-          steps.push({ type: "barrier", lane });
-          steps.push({ type: "gap", lane }); // spacing for reaction
-          steps.push({ type: "tunnel", lane });
-        } else {
-          // slide -> jump
-          steps.push({ type: "tunnel", lane });
-          steps.push({ type: "gap", lane });
-          steps.push({ type: "barrier", lane });
-        }
-        i += 3;
-      } else {
-        const lane = Math.floor(Math.random() * 3);
-        const type = types[Math.floor(Math.random() * types.length)];
-        steps.push({ type, lane });
-        i++;
+      // Prevent impossible patterns by ensuring at least one lane is clear or passable
+      if (i > 0 && steps[i-1].type === "lane" && type === "lane" && steps[i-1].lane !== lane) {
+        // Two lane obstacles in a row but different lanes is fine
       }
+      
+      steps.push({ type, lane });
     }
     return steps;
   }
 
   useEffect(() => {
-    patternQueueRef.current = generatePattern(Math.max(1, levelRef.current || 1));
+    patternQueueRef.current = generatePattern();
     patternIndexRef.current = 0;
     const startZ = (playerRef.current ? playerRef.current.z : 0) - 60;
     const currentSpeed = speedRef.current || 0.28;
-    // Use the same safe-gap formula as respawn for consistency
-    const MIN_SAFE_GAP = 14;
-    const BASE_GAP = 22;
-    const speedFactor = Math.max(0, currentSpeed - 0.28) * 8;
-    const spacing = Math.max(MIN_SAFE_GAP, BASE_GAP - speedFactor);
+    const spacing = Math.max(14, 22 - (currentSpeed - 0.28) * 8);
+
     obs.current.forEach((o, i) => {
       const step = patternQueueRef.current[i % patternQueueRef.current.length];
-      o.type = step.type || "barrier";
-      o.x = LANES[step.lane ?? Math.floor(Math.random() * 3)];
+      o.type = step.type;
+      o.lane = step.lane;
+      o.x = LANES[step.lane];
       o.z = startZ - i * spacing;
     });
-    storedLevelRef.current = Math.max(1, levelRef?.current || 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useFrame((state, delta) => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || gameOver) return;
     const pz = playerRef.current.z;
 
     obs.current.forEach((o, i) => {
-      if (o.type === "gap") {
-        if (o.z > pz + 28) respawn(o);
-        return;
-      }
-
       // High-precision hitboxes
       let hitDx = 0.65; 
       let hitDz = 1.0;
       
-      if (o.type === "train") {
-        hitDx = 0.85;
-        hitDz = 2.0;
+      if (o.type === "lane") {
+        hitDx = 0.75;
+        hitDz = 1.8;
       }
 
       const dx = Math.abs(o.x - playerRef.current.x);
@@ -842,11 +1022,9 @@ const Obstacles = memo(function Obstacles({
           }
         };
 
-        if (o.type === "barrier") {
-          // Medium Jump Barrier (precise timing)
+        if (o.type === "jump") {
           if (py < 1.1) handleHit();
           else {
-            // Success: clear mission
             const m = missionRef.current;
             if (m && m.type === "jumps" && !nearMissedRef.current[i]) {
               nearMissedRef.current[i] = true;
@@ -854,24 +1032,20 @@ const Obstacles = memo(function Obstacles({
               if (m.progress >= m.target) finalizeMissionCompletion(m);
             }
           }
-        } else if (o.type === "tunnel") {
-          // High Slide Obstacle
+        } else if (o.type === "slide") {
           if (ps > 0.6) handleHit();
           else {
-             // Success: clear mission
-             const m = missionRef.current;
-             if (m && (m.type === "slides" || m.type === "slides_run") && !nearMissedRef.current[i]) {
-               nearMissedRef.current[i] = true;
-               m.progress += 1;
-               if (m.progress >= m.target) finalizeMissionCompletion(m);
-             }
+            const m = missionRef.current;
+            if (m && (m.type === "slides" || m.type === "slides_run") && !nearMissedRef.current[i]) {
+              nearMissedRef.current[i] = true;
+              m.progress += 1;
+              if (m.progress >= m.target) finalizeMissionCompletion(m);
+            }
           }
         } else {
           handleHit();
         }
-
       } else {
-        // NEAR-MISS detection
         const now = performance.now() / 1000;
         if (!nearMissedRef.current[i] && now - lastNearMissAtRef.current > NEAR_MISS_COOLDOWN) {
           if (dz < NEAR_MISS_DZ && dx < NEAR_MISS_DX) {
@@ -887,9 +1061,8 @@ const Obstacles = memo(function Obstacles({
 
       const g = groupRefs.current[i];
       if (g) {
-        const y = o.type === "train" ? 1.0 : o.type === "barrier" ? 0.45 : o.type === "tunnel" ? 1.7 : 0.85;
+        const y = o.type === "lane" ? 1.0 : o.type === "jump" ? 0.45 : o.type === "slide" ? 1.7 : 0.85;
         g.position.set(o.x, y, o.z);
-        g.visible = o.type !== "gap";
       }
     });
   });
@@ -900,7 +1073,6 @@ const Obstacles = memo(function Obstacles({
     
     if (!patternQueueRef.current || patternQueueRef.current.length === 0) {
       patternQueueRef.current = generatePattern();
-      patternIndexRef.current = 0;
     }
     const step = patternQueueRef.current[patternIndexRef.current % patternQueueRef.current.length];
     patternIndexRef.current++;
@@ -911,25 +1083,22 @@ const Obstacles = memo(function Obstacles({
     });
 
     const currentSpeed = speedRef.current || 0.28;
-    // Spacing scales slightly with speed but keeps minimum reaction gap
     const spacing = Math.max(15, 22 - (currentSpeed - 0.28) * 5);
 
     o.z = minZ - spacing;
-    o.x = LANES[step.lane ?? 1];
-    o.type = step.type || "barrier";
+    o.lane = step.lane;
+    o.x = LANES[step.lane];
+    o.type = step.type;
   }
 
-  // FIX 5: Near-miss slow-mo + screen shake for addictive feedback
   function triggerNearMissSlowMo() {
     if (nearSlowMoActiveRef.current) return;
     nearSlowMoActiveRef.current = true;
     if (crashFxRef) crashFxRef.current = Math.max(crashFxRef.current || 0, 0.25);
-
     const totalMs = 300;
     const start = performance.now();
     const orig = speedRef.current;
     const target = orig * 0.6;
-
     const step = () => {
       const now = performance.now();
       const t = (now - start) / totalMs;
@@ -945,16 +1114,14 @@ const Obstacles = memo(function Obstacles({
   }
 
   return obs.current.map((o, i) => {
-    if (o.type === "gap") return null;
-
-    if (o.type === "train") {
+    if (o.type === "lane") {
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
           <mesh castShadow position={[0, 0.4, 0]}>
-            <boxGeometry args={[2.0, 1.8, 5.0]} />
+            <boxGeometry args={[1.8, 1.8, 4.0]} />
             <meshStandardMaterial color="#ef4444" />
           </mesh>
-          <mesh position={[0, 0.6, -2.5]}>
+          <mesh position={[0, 0.6, -2.0]}>
             <boxGeometry args={[1.6, 0.8, 0.1]} />
             <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.6} />
           </mesh>
@@ -962,7 +1129,7 @@ const Obstacles = memo(function Obstacles({
       );
     }
 
-    if (o.type === "barrier") {
+    if (o.type === "jump") {
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
           <mesh castShadow>
@@ -977,15 +1144,13 @@ const Obstacles = memo(function Obstacles({
       );
     }
 
-    if (o.type === "tunnel") {
+    if (o.type === "slide") {
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
-          {/* Top Bar - Clearly HIGH */}
           <mesh castShadow position={[0, 0.6, 0]}>
             <boxGeometry args={[1.9, 0.6, 1.2]} />
             <meshStandardMaterial color="#7c3aed" emissive="#7c3aed" emissiveIntensity={0.3} />
           </mesh>
-          {/* Side supports */}
           <mesh position={[-0.85, -0.8, 0]}>
             <boxGeometry args={[0.2, 2.4, 0.2]} />
             <meshStandardMaterial color="#5b21b6" />
@@ -998,30 +1163,23 @@ const Obstacles = memo(function Obstacles({
       );
     }
 
-    return (
-      <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
-        <mesh castShadow>
-          <boxGeometry args={[1.8, 2.2, 0.8]} />
-          <meshStandardMaterial color="#334155" />
-        </mesh>
-      </group>
-    );
+    return null;
   });
 });
 
 // ---------------- BOOSTERS ----------------
-const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activateShieldRef, playShieldRef, playPowerupRef }) {
+const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activateShieldRef, playShieldRef, playPowerupRef, gameOver }) {
   const boosters = useRef(
-    Array.from({ length: 4 }, (_, i) => {
-      const type = i % 2 === 0 ? "magnet" : "shield";
-      return { type, x: LANES[Math.floor(Math.random() * 3)], z: -(50 + Math.random() * 300) };
+    Array.from({ length: 2 }, (_, i) => {
+      const type = i === 0 ? "magnet" : "shield";
+      return { type, x: LANES[Math.floor(Math.random() * 3)], z: -(200 + Math.random() * 800) };
     })
   );
 
   const groupRefs = useRef([]);
 
   useFrame((state, delta) => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || gameOver) return;
     const pz = playerRef.current.z;
 
     boosters.current.forEach((b, i) => {
@@ -1036,12 +1194,12 @@ const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activate
           activateShieldRef?.current && activateShieldRef.current();
           playShieldRef?.current && playShieldRef.current();
         }
-        b.z = pz - (1000 + Math.random() * 1200);
+        b.z = pz - (2500 + Math.random() * 3500);
         b.x = LANES[Math.floor(Math.random() * 3)];
       }
 
       if (b.z > pz + 30) {
-        b.z = pz - (1000 + Math.random() * 1200);
+        b.z = pz - (2500 + Math.random() * 3500);
         b.x = LANES[Math.floor(Math.random() * 3)];
       }
 
@@ -1056,7 +1214,7 @@ const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activate
         <>
           <mesh>
             <torusGeometry args={[0.38, 0.08, 12, 20]} />
-            <meshStandardMaterial color="#60a5fa" />
+            <meshStandardMaterial color="#60a5fa" emissive="#60a5fa" emissiveIntensity={0.5} />
           </mesh>
           <mesh position={[0, 0.18, 0]}>
             <sphereGeometry args={[0.08, 8, 8]} />
@@ -1067,7 +1225,7 @@ const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activate
         <>
           <mesh>
             <icosahedronGeometry args={[0.32, 0]} />
-            <meshStandardMaterial color="#10b981" metalness={0.5} roughness={0.3} />
+            <meshStandardMaterial color="#10b981" metalness={0.5} roughness={0.3} emissive="#10b981" emissiveIntensity={0.5} />
           </mesh>
           <mesh rotation={[Math.PI / 2, 0, 0]}>
             <torusGeometry args={[0.45, 0.06, 8, 24]} />
@@ -1080,22 +1238,48 @@ const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activate
 });
 
 // ---------------- POWER-UPS (Double Coins, Hoverboard) ----------------
-const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, playPowerupRef }) {
+const POWERUP_SPAWN_INTERVAL = 4500;
+const POWERUP_SAFE_CLEARANCE = 30;
+
+const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, playPowerupRef, gameOver, obstaclesRef, speedRef }) {
   const ups = useRef(
-    Array.from({ length: 3 }, (_, i) => {
-      const types = ["double", "hover"];
-      const t = types[i % types.length];
-      return { type: t, x: LANES[Math.floor(Math.random() * 3)], z: -(120 + Math.random() * 700), bob: 0 };
-    })
+    Array.from({ length: 2 }, (_, i) => ({
+      type: i === 0 ? "double" : "hover",
+      x: LANES[Math.floor(Math.random() * 3)],
+      z: -(600 + Math.random() * 1800),
+      bob: 0,
+      pattern: Math.floor(Math.random() * 4),
+    }))
   );
 
   const groupRefs = useRef([]);
+  const lastSpawnRef = useRef(0);
+  const patternCooldownRef = useRef({ afterObstacleSeq: false });
+
+  function findSafeLane(zPos, avoidLanes = []) {
+    let safeLanes = [0, 1, 2].filter(l => !avoidLanes.includes(l));
+    if (safeLanes.length === 0) safeLanes = [0, 1, 2];
+    return safeLanes[Math.floor(Math.random() * safeLanes.length)];
+  }
+
+  function isPathClear(zPos, lane, obstacles) {
+    const checkRange = POWERUP_SAFE_CLEARANCE;
+    for (let obs of obstacles) {
+      if (Math.abs(obs.z - zPos) < checkRange && obs.lane === lane) {
+        if (obs.type === "lane") return false;
+      }
+    }
+    return true;
+  }
 
   useFrame((state) => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || gameOver) return;
     const pz = playerRef.current.z;
+    const now = state.clock.elapsedTime;
+    const speed = speedRef.current || 0.28;
+
     ups.current.forEach((u, idx) => {
-      u.bob = Math.sin((state.clock.elapsedTime + idx) * 2.2) * 0.12;
+      u.bob = Math.sin((state.clock.elapsedTime + idx * 0.7) * 2.2) * 0.12;
       const dx = Math.abs(u.x - playerRef.current.x);
       const dz = Math.abs(u.z - pz);
 
@@ -1104,17 +1288,46 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
         if (u.type === "double") activateDoubleRef?.current && activateDoubleRef.current();
         else if (u.type === "hover") activateHoverRef?.current && activateHoverRef.current();
 
-        u.z = pz - (1500 + Math.random() * 2000);
+        u.z = pz - (7000 + Math.random() * 10000);
         u.x = LANES[Math.floor(Math.random() * 3)];
-        const r = Math.random();
-        u.type = r < 0.85 ? "double" : "hover";
+        u.type = Math.random() < 0.65 ? "double" : "hover";
+        u.pattern = Math.floor(Math.random() * 4);
+        lastSpawnRef.current = now;
       }
 
       if (u.z > pz + 40) {
-        u.z = pz - (1500 + Math.random() * 2000);
-        u.x = LANES[Math.floor(Math.random() * 3)];
-        const r = Math.random();
-        u.type = r < 0.85 ? "double" : "hover";
+        const patternRoll = Math.random();
+        if (patternRoll < 0.25 || now - lastSpawnRef.current > 8) {
+          if (obstaclesRef?.current) {
+            const obstacleSeqs = obstaclesRef.current.filter(o => o.z < pz - 40 && o.z > pz - 100);
+            const recentLaneObs = obstacleSeqs.filter(o => o.type === "lane");
+            if (recentLaneObs.length >= 2) {
+              const gapZ = pz - (80 + Math.random() * 40);
+              const avoidLanes = recentLaneObs.map(o => o.lane);
+              let safeLane = findSafeLane(gapZ, avoidLanes);
+              if (isPathClear(gapZ, safeLane, obstaclesRef.current)) {
+                u.z = gapZ;
+                u.x = LANES[safeLane];
+                patternCooldownRef.current.afterObstacleSeq = true;
+                lastSpawnRef.current = now;
+              } else {
+                u.z = pz - (5000 + Math.random() * 8000);
+                u.x = LANES[Math.floor(Math.random() * 3)];
+              }
+            } else {
+              u.z = pz - (5000 + Math.random() * 8000);
+              u.x = LANES[Math.floor(Math.random() * 3)];
+            }
+          } else {
+            u.z = pz - (5000 + Math.random() * 8000);
+            u.x = LANES[Math.floor(Math.random() * 3)];
+          }
+        } else {
+          u.z = pz - (5000 + Math.random() * 8000);
+          u.x = LANES[Math.floor(Math.random() * 3)];
+        }
+        u.type = Math.random() < 0.65 ? "double" : "hover";
+        u.pattern = Math.floor(Math.random() * 4);
       }
 
       const g = groupRefs.current[idx];
@@ -1141,7 +1354,7 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
     if (u.type === "hover") {
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)} position={[u.x, y, u.z]}>
-          <mesh rotation={[0, 0, 0]}>
+          <mesh>
             <boxGeometry args={[0.6, 0.06, 0.4]} />
             <meshStandardMaterial color="#a78bfa" emissive="#a78bfa" emissiveIntensity={0.9} />
           </mesh>
@@ -1157,7 +1370,7 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
 });
 
 // ---------------- FX (Speed lines + particles) ----------------
-const SpeedLines = memo(function SpeedLines({ playerRef, speedRef }) {
+const SpeedLines = memo(function SpeedLines({ playerRef, speedRef, gameOver }) {
   const lines = useRef(
     Array.from({ length: 22 }, () => ({
       x: -4.8 + Math.random() * 9.6,
@@ -1169,7 +1382,7 @@ const SpeedLines = memo(function SpeedLines({ playerRef, speedRef }) {
   const refs = useRef([]);
 
   useFrame(() => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || gameOver) return;
     const pz = playerRef.current.z;
     const speed = Math.max(0.28, speedRef?.current || 0.28);
     const vis = Math.min(0.75, Math.max(0.06, (speed - 0.2) * 0.5));
@@ -1201,7 +1414,7 @@ const SpeedLines = memo(function SpeedLines({ playerRef, speedRef }) {
   );
 });
 
-const RunnerFX = memo(function RunnerFX({ playerRef, speedRef, crashSignal }) {
+const RunnerFX = memo(function RunnerFX({ playerRef, speedRef, crashSignal, gameOver }) {
   const trail = useRef(
     Array.from({ length: 24 }, () => ({
       x: 0,
@@ -1229,7 +1442,7 @@ const RunnerFX = memo(function RunnerFX({ playerRef, speedRef, crashSignal }) {
   const lastSignalRef = useRef(crashSignal);
 
   useFrame((state, delta) => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || gameOver) return;
     const speed = Math.max(0.28, speedRef?.current || 0.28);
 
     // running dust/trail
@@ -1830,6 +2043,7 @@ function ModernHUD({
   onTogglePause,
   onUIButtonClick,
   onToggleTheme,
+  onOpenMissions,
   missionUI,
   combo = 0,
   magnet = false,
@@ -1868,6 +2082,17 @@ function ModernHUD({
           title="Switch Theme"
         >
           🎨
+        </button>
+
+        <button
+          className="hud-pause hud-fade"
+          onClick={() => {
+            onUIButtonClick && onUIButtonClick();
+            onOpenMissions && onOpenMissions();
+          }}
+          title="Missions"
+        >
+          🎯
         </button>
       </div>
 
@@ -1942,7 +2167,7 @@ function ThemePanel({ current, onSelect }) {
 
 
 // Start Screen
-function StartScreen({ started, onStart, onOpenShop, onUIButtonClick, onToggleTheme }) {
+function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonClick, onToggleTheme }) {
   useEffect(() => {
     function key(e) {
       if (started) return;
@@ -1995,11 +2220,11 @@ function StartScreen({ started, onStart, onOpenShop, onUIButtonClick, onToggleTh
               className="start-cta"
               onClick={() => {
                 onUIButtonClick && onUIButtonClick();
-                alert("Tip: Use ← → to change lanes, ↑ to jump, ↓ to slide.");
+                onOpenMissions && onOpenMissions();
               }}
-              style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.06)" }}
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
             >
-              How to Play
+              Missions
             </button>
             <button
               className="start-cta"
@@ -2214,6 +2439,144 @@ function ShopOverlay({ open, onClose, coins, upgrades, onBuy, onUIButtonClick })
   );
 }
 
+// ---------------- MISSION OVERLAY ----------------
+function MissionOverlay({ open, onClose, dailyMissions, lifetimeMilestones, lifetimeStats, streak, onClaimDaily, onClaimMilestone, onUIButtonClick }) {
+  const [tab, setTab] = useState("daily");
+  if (!open) return null;
+
+  return (
+    <div className="shop-overlay" style={{ zIndex: 12000 }}>
+      <div className="start-bg" style={{ opacity: 0.9, background: "rgba(15, 23, 42, 0.95)" }} />
+      <div className="shop-card" style={{ width: "min(600px, 94%)", maxHeight: "85vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 24, fontWeight: 900 }}>Missions & Milestones</div>
+          <button className="btn-ghost" onClick={onClose}>Close</button>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+          <button 
+            className={`btn-ghost ${tab === "daily" ? "active" : ""}`} 
+            style={{ flex: 1, background: tab === "daily" ? "var(--accent)" : "rgba(255,255,255,0.05)" }}
+            onClick={() => setTab("daily")}
+          >
+            Daily
+          </button>
+          <button 
+            className={`btn-ghost ${tab === "milestones" ? "active" : ""}`} 
+            style={{ flex: 1, background: tab === "milestones" ? "var(--accent)" : "rgba(255,255,255,0.05)" }}
+            onClick={() => setTab("milestones")}
+          >
+            Milestones
+          </button>
+        </div>
+
+        {tab === "daily" ? (
+          <div className="shop-list">
+             <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>Streak: {streak} days (x{(1 + streak * 0.05).toFixed(2)} bonus)</div>
+             {dailyMissions.map(m => (
+               <div className="shop-item" key={m.id}>
+                 <div style={{ textAlign: "left" }}>
+                   <div style={{ fontWeight: 800 }}>{m.desc}</div>
+                   <div style={{ fontSize: 12, color: "var(--muted)" }}>Reward: {m.reward} Coins</div>
+                   <div className="mission-progress-bar" style={{ width: 120 }}>
+                     <div className="mission-fill" style={{ width: `${(m.progress / m.target) * 100}%` }} />
+                   </div>
+                 </div>
+                 <button 
+                   className="btn-primary" 
+                   disabled={!m.completed || m.claimed}
+                   onClick={() => { onUIButtonClick(); onClaimDaily(m.id); }}
+                 >
+                   {m.claimed ? "Claimed" : m.completed ? "Claim" : `${m.progress}/${m.target}`}
+                 </button>
+               </div>
+             ))}
+          </div>
+        ) : (
+          <div className="shop-list">
+            {lifetimeMilestones.map(m => {
+              const val = lifetimeStats[m.type] || 0;
+              const completed = val >= m.target;
+              return (
+                <div className="shop-item" key={m.id}>
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ fontWeight: 800 }}>{m.desc}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>Reward: {m.reward} Coins</div>
+                    <div className="mission-progress-bar" style={{ width: 120 }}>
+                      <div className="mission-fill" style={{ width: `${Math.min(100, (val / m.target) * 100)}%` }} />
+                    </div>
+                  </div>
+                  <button 
+                    className="btn-primary" 
+                    disabled={!completed}
+                    onClick={() => { onUIButtonClick(); onClaimMilestone(m.id); }}
+                  >
+                    {completed ? "Claimed" : `${val}/${m.target}`}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- MYSTERY BOX OVERLAY ----------------
+function MysteryBoxOverlay({ open, reward, onOpen, onUIButtonClick }) {
+  const [opening, setOpening] = useState(false);
+  if (!open) return null;
+
+  return (
+    <div className="shop-overlay" style={{ zIndex: 13000 }}>
+      <div className="start-bg" style={{ opacity: 0.95, background: "rgba(2, 6, 23, 0.98)" }} />
+      <div className="start-card" style={{ transform: opening ? "scale(1.1)" : "scale(1)", transition: "transform 0.5s" }}>
+        <div style={{ fontSize: 80, marginBottom: 20, animation: opening ? "boxShake 0.5s infinite" : "none" }}>🎁</div>
+        <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 10 }}>You found a Mystery Box!</div>
+        <button 
+          className="start-cta" 
+          onClick={() => {
+            setOpening(true);
+            onUIButtonClick();
+            setTimeout(() => {
+              onOpen();
+              setOpening(false);
+            }, 1000);
+          }}
+          disabled={opening}
+        >
+          {opening ? "Opening..." : "OPEN BOX"}
+        </button>
+        <style>{`
+          @keyframes boxShake {
+            0% { transform: rotate(0); }
+            25% { transform: rotate(-10deg); }
+            75% { transform: rotate(10deg); }
+            100% { transform: rotate(0); }
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- EVENT BANNER ----------------
+function EventBanner({ event }) {
+  if (!event) return null;
+  return (
+    <div style={{ 
+      position: "absolute", top: 18, left: "50%", transform: "translateX(-50%)", 
+      zIndex: 1000, background: "rgba(255, 0, 110, 0.2)", backdropFilter: "blur(4px)",
+      padding: "4px 12px", borderRadius: "20px", border: "1px solid var(--accent)",
+      color: "white", fontSize: 12, fontWeight: 800, textAlign: "center",
+      display: "flex", alignItems: "center", gap: 8
+    }}>
+      <span style={{ color: "#ffd166" }}>EVENT:</span> {event.name} — {event.desc}
+    </div>
+  );
+}
+
 // ---------------- MAIN ----------------
 export default function App() {
   // controls as refs to avoid extra re-renders
@@ -2262,31 +2625,6 @@ export default function App() {
   const missionRef = useRef(null);
   const [missionUI, setMissionUI] = useState({ short: "", desc: "", progress: "", percent: 0 });
 
-
-  // counters used for missions
-  const coinCountRef = useRef(0);
-  const jumpCountRef = useRef(0);
-  const slideCountRef = useRef(0);
-  const levelStartTimeRef = useRef(0);
-  const missionCompletedRef = useRef(false);
-  const levelTransitioningRef = useRef(false);
-
-  const playerRef = useRef(null);
-  const speedRef = useRef(0.28); // slower start
-
-  // Floating text & flash refs
-  const spawnTextRef = useRef(null);       // set by FloatingTextsProvider context (wired by SpawnTextWire)
-  const coinFlashCountRef = useRef(0);     // throttle coin flash to every 3rd collect
-  const [nearMissFlash, setNearMissFlash] = useState(0); // increments to re-trigger CSS animation
-  const [coinFlash, setCoinFlash] = useState(0);         // increments to re-trigger glow flash
-
-  const audio = useGameAudio();
-  const { playCoin, playPowerup, playJump, playSlide, playFall, playShield, playClick, playBgm, stopBgm } = audio;
-
-  const magnetTimerRef = useRef(null);
-  const shieldTimerRef = useRef(null);
-
-
   // ---------------- SHOP & COINS ----------------
   const coinsRef = useRef(0);
   const [coinsTotal, setCoinsTotal] = useState(0);
@@ -2301,6 +2639,75 @@ export default function App() {
     magnet: false,
     shield: false,
   });
+
+  // ---------------- MISSION & EVENT SYSTEM ----------------
+  const [runDistance, setRunDistance] = useState(0);
+  const [runJumps, setRunJumps] = useState(0);
+  const [runSlides, setRunSlides] = useState(0);
+  const [runNearMisses, setRunNearMisses] = useState(0);
+  const [missionsOpen, setMissionsOpen] = useState(false);
+
+  const {
+    dailyMissions,
+    lifetimeStats,
+    currentEvent,
+    streak,
+    lifetimeMilestones,
+    updateEventProgress,
+    claimMissionReward,
+    incrementStreak,
+    claimMilestone,
+    setLifetimeStats,
+  } = useMissionEventSystem(
+    score,
+    runCoins,
+    runDistance,
+    runJumps,
+    runSlides,
+    runNearMisses,
+    (n) => addCoins(n)
+  );
+
+  const {
+    showMysteryBox,
+    mysteryBoxReward,
+    triggerMysteryBox,
+    openMysteryBox,
+  } = useMysteryBoxSystem((n) => addCoins(n));
+
+  // ----------------- EVENT EFFECTS -----------------
+  const eventMultiplier = useMemo(() => {
+    if (!currentEvent) return { coins: 1, speed: 1, score: 1 };
+    return {
+      coins: currentEvent.multiplier?.coins || 1,
+      speed: currentEvent.multiplier?.speed || 1,
+      score: currentEvent.effect?.scoreMult || 1,
+    };
+  }, [currentEvent]);
+
+  // counters used for missions
+  const coinCountRef = useRef(0);
+  const jumpCountRef = useRef(0);
+  const slideCountRef = useRef(0);
+  const levelStartTimeRef = useRef(0);
+  const missionCompletedRef = useRef(false);
+  const levelTransitioningRef = useRef(false);
+
+  const playerRef = useRef(null);
+  const speedRef = useRef(0.28); 
+  const obstaclesRef = useRef(Array.from({ length: 12 }, () => ({ x: 0, z: -999, type: "jump", lane: 1 })));
+
+  // Floating text & flash refs
+  const spawnTextRef = useRef(null);       // set by FloatingTextsProvider context (wired by SpawnTextWire)
+  const coinFlashCountRef = useRef(0);     // throttle coin flash to every 3rd collect
+  const [nearMissFlash, setNearMissFlash] = useState(0); // increments to re-trigger CSS animation
+  const [coinFlash, setCoinFlash] = useState(0);         // increments to re-trigger glow flash
+
+  const audio = useGameAudio();
+  const { playCoin, playPowerup, playJump, playSlide, playFall, playShield, playClick, playBgm, stopBgm } = audio;
+
+  const magnetTimerRef = useRef(null);
+  const shieldTimerRef = useRef(null);
 
   // function refs to avoid re-rendering children when functions change
   const addScoreRef = useRef(null);
@@ -2617,42 +3024,39 @@ export default function App() {
 
     let startX = 0;
     let startY = 0;
+    let swipeThreshold = 40;
 
-    // FIX 1: Use non-passive touchstart + touchmove to block page scroll/refresh
     function touchStart(e) {
-      // Always prevent default to stop pull-to-refresh and page scroll
-      try { e.preventDefault(); } catch {}
+      if (e.cancelable) e.preventDefault();
       const t = e.touches ? e.touches[0] : e;
       startX = t.clientX;
       startY = t.clientY;
     }
+
     function touchMove(e) {
-      // Block all native scroll/overscroll during game
-      try { e.preventDefault(); } catch {}
+      if (e.cancelable) e.preventDefault();
     }
+
     function touchEnd(e) {
-      try { e.preventDefault(); } catch {}
+      if (e.cancelable) e.preventDefault();
       if (!started || gameOver || paused) return;
       const t = e.changedTouches ? e.changedTouches[0] : e;
       const dx = t.clientX - startX;
       const dy = t.clientY - startY;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
-      const threshold = 32; // slightly more responsive
 
-      if (absX > absY && absX > threshold) {
-        if (dx > 0) laneRef.current = Math.min(laneRef.current + 1, 2);
-        else laneRef.current = Math.max(laneRef.current - 1, 0);
-      } else if (absY > absX && absY > threshold) {
-        if (dy < 0) {
-          triggerJump();
+      if (Math.max(absX, absY) > swipeThreshold) {
+        if (absX > absY) {
+          if (dx > 0) laneRef.current = Math.min(laneRef.current + 1, 2);
+          else laneRef.current = Math.max(laneRef.current - 1, 0);
         } else {
-          triggerSlide();
+          if (dy < 0) triggerJump();
+          else triggerSlide();
         }
       }
     }
 
-    // passive: false is required to call preventDefault() on touch events
     window.addEventListener("touchstart", touchStart, { passive: false });
     window.addEventListener("touchmove", touchMove, { passive: false });
     window.addEventListener("touchend", touchEnd, { passive: false });
@@ -2669,6 +3073,7 @@ export default function App() {
   function triggerJump() {
     jumpRef.current = true;
     jumpCountRef.current += 1;
+    setRunJumps(prev => prev + 1);
     jumpStartRef.current = performance.now() / 1000;
 
     // play jump sound (safe)
@@ -2697,6 +3102,7 @@ export default function App() {
   function triggerSlide() {
     slideRef.current = performance.now() / 1000;
     slideCountRef.current += 1;
+    setRunSlides(prev => prev + 1);
 
     // play slide sound (safe)
     try {
@@ -2765,11 +3171,16 @@ export default function App() {
       if (!started || gameOver || paused) return;
       const targetMulti = Math.min(4.2, 1 + (speedRef.current - 0.28) * 0.9 + comboRef.current * 0.08);
       multiplierRef.current += (targetMulti - multiplierRef.current) * Math.min(1, delta * 3.2);
-      scoreRef.current += delta * 14 * multiplierRef.current;
+      
+      // Score with event multiplier
+      scoreRef.current += delta * 14 * multiplierRef.current * (eventMultiplier?.score || 1);
+      
+      // Distance tracking
+      setRunDistance(prev => prev + (speedRef.current * delta * 60 * 0.1)); // Scale for "meters"
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [started, gameOver, paused]);
+  }, [started, gameOver, paused, eventMultiplier]);
 
   function addScore(delta = 0, source = "") {
     scoreRef.current = (scoreRef.current || 0) + delta;
@@ -2818,6 +3229,7 @@ export default function App() {
           size: 18,
         });
         setNearMissFlash(v => v + 1);
+        setRunNearMisses(prev => prev + 1);
       } catch {}
     }
   }
@@ -2844,8 +3256,26 @@ export default function App() {
     if (gameOver) {
       setScore(Math.max(0, Math.floor(scoreRef.current || 0)));
       stopBgm && stopBgm();
+      
+      // Update lifetime stats
+      setLifetimeStats(prev => ({
+        ...prev,
+        totalCoins: prev.totalCoins + runCoins,
+        totalDistance: prev.totalDistance + Math.floor(runDistance),
+        totalRuns: prev.totalRuns + 1,
+        totalJumps: prev.totalJumps + runJumps,
+        totalSlides: prev.totalSlides + runSlides,
+        totalNearMisses: prev.totalNearMisses + runNearMisses,
+        highScore: Math.max(prev.highScore, score)
+      }));
+
+      // Update event progress
+      updateEventProgress(runCoins);
+
+      // Random chance for mystery box
+      triggerMysteryBox();
     }
-  }, [gameOver, stopBgm]);
+  }, [gameOver]);
 
   useEffect(() => {
     let id = null;
@@ -2886,6 +3316,9 @@ export default function App() {
   }, []);
 
   const handleRetry = () => {
+    // Increment streak on first run of the day
+    incrementStreak();
+    
     // clear active timers safely
     if (magnetTimerRef.current) {
       clearTimeout(magnetTimerRef.current);
@@ -2951,6 +3384,7 @@ export default function App() {
   };
 
   const handleStart = () => {
+    incrementStreak();
     setStarted(true);
     setRestartKey((k) => k + 1);
     setLevel(1);
@@ -3076,6 +3510,7 @@ export default function App() {
             started={started} 
             onStart={handleStart} 
             onOpenShop={onOpenShop} 
+            onOpenMissions={() => setMissionsOpen(true)}
             onUIButtonClick={playClick} 
             onToggleTheme={() => setShowThemePanel(v => !v)} 
           />
@@ -3142,10 +3577,11 @@ export default function App() {
               skinColors={skinColors}
               hoverboardActive={hoverboardActive}
             />
-            <BackgroundAnimations theme={THEMES[themeIndex]} />
-            <Track playerRef={playerRef} theme={THEMES[themeIndex]} />
+            <BackgroundAnimations theme={THEMES[themeIndex]} speedRef={speedRef} playerRef={playerRef} gameOver={gameOver || paused} />
+            <Track playerRef={playerRef} theme={THEMES[themeIndex]} gameOver={gameOver || paused} />
             <Obstacles
               playerRef={playerRef}
+              gameOver={gameOver || paused}
               setGameOver={(v) => {
                 setGameOver(v);
               }}
@@ -3163,6 +3599,7 @@ export default function App() {
               crashFxRef={crashFxRef}
               missionRef={missionRef}
               finalizeMissionCompletion={finalizeMissionCompletion}
+              obstaclesRef={obstaclesRef}
             />
             <Coins
               playerRef={playerRef}
@@ -3172,13 +3609,15 @@ export default function App() {
               magnet={magnet}
               speedRef={speedRef}
               doubleActive={doubleActive}
+              obstaclesRef={obstaclesRef}
+              gameOver={gameOver || paused}
             />
-            <Boosters playerRef={playerRef} activateMagnetRef={activateMagnetRef} activateShieldRef={activateShieldRef} playShieldRef={playShieldRef} playPowerupRef={playPowerupRef} />
+            <Boosters playerRef={playerRef} activateMagnetRef={activateMagnetRef} activateShieldRef={activateShieldRef} playShieldRef={playShieldRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} />
 
-            <PowerUps playerRef={playerRef} activateDoubleRef={activateDoubleRef} activateHoverRef={activateHoverRef} playPowerupRef={playPowerupRef} />
+            <PowerUps playerRef={playerRef} activateDoubleRef={activateDoubleRef} activateHoverRef={activateHoverRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} obstaclesRef={obstaclesRef} speedRef={speedRef} />
 
-            <SpeedLines playerRef={playerRef} speedRef={speedRef} />
-            <RunnerFX playerRef={playerRef} speedRef={speedRef} crashSignal={crashSignal} />
+            <SpeedLines playerRef={playerRef} speedRef={speedRef} gameOver={gameOver || paused} />
+            <RunnerFX playerRef={playerRef} speedRef={speedRef} crashSignal={crashSignal} gameOver={gameOver || paused} />
             <CameraFollow playerRef={playerRef} speedRef={speedRef} crashFxRef={crashFxRef} />
           </group>
         )}
@@ -3186,6 +3625,7 @@ export default function App() {
 
       {started && !gameOver && (
         <>
+          <EventBanner event={currentEvent} />
           <ModernHUD
             score={score}
             runCoins={runCoins}
@@ -3193,6 +3633,7 @@ export default function App() {
             onTogglePause={() => setPaused((p) => !p)}
             onUIButtonClick={playClick}
             onToggleTheme={() => setShowThemePanel(v => !v)}
+            onOpenMissions={() => setMissionsOpen(true)}
             missionUI={missionUI}
             combo={combo}
             magnet={magnet}
@@ -3212,6 +3653,25 @@ export default function App() {
           )}
         </>
       )}
+
+      <MissionOverlay 
+        open={missionsOpen} 
+        onClose={() => setMissionsOpen(false)}
+        dailyMissions={dailyMissions}
+        lifetimeMilestones={lifetimeMilestones}
+        lifetimeStats={lifetimeStats}
+        streak={streak}
+        onClaimDaily={claimMissionReward}
+        onClaimMilestone={claimMilestone}
+        onUIButtonClick={playClick}
+      />
+
+      <MysteryBoxOverlay 
+        open={showMysteryBox}
+        reward={mysteryBoxReward}
+        onOpen={openMysteryBox}
+        onUIButtonClick={playClick}
+      />
 
 
 
