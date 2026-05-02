@@ -774,7 +774,6 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
   const groupRefs = useRef([]);
   const coinScaleRefs = useRef(coins.current.map(() => ({ s: 1, t: 0 })));
   const nextClusterIdRef = useRef(0);
-  const usedClusterObsRef = useRef(new Set());
 
   useFrame((state, delta) => {
     if (!playerRef.current || gameOver) return;
@@ -858,13 +857,11 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
 
   function respawnCoin(c) {
     const pz = playerRef.current ? playerRef.current.z : 0;
-    const idx = coins.current.indexOf(c);
 
     if (obstaclesRef && obstaclesRef.current) {
-      const obsAhead = obstaclesRef.current.filter(o => o.z < pz - 25 && !usedClusterObsRef.current.has(o));
+      const obsAhead = obstaclesRef.current.filter(o => o.z < pz - 25);
       if (obsAhead.length > 0 && Math.random() < 0.7) {
         const targetObs = obsAhead[Math.floor(Math.random() * obsAhead.length)];
-        usedClusterObsRef.current.add(targetObs);
         c.inCluster = false;
         c.clusterId = -1;
         spawnCoinCluster(targetObs);
@@ -874,7 +871,6 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
 
     c.inCluster = false;
     c.clusterId = -1;
-    usedClusterObsRef.current.clear();
 
     c.z = pz - (80 + Math.random() * 120);
     c.x = LANES[Math.floor(Math.random() * 3)];
