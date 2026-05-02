@@ -756,6 +756,7 @@ const COIN_PATTERNS = {
   STRAIGHT: 0,
   ARC: 1,
   LOW: 2,
+  LANE_SHIFT: 3,
 };
 
 const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoinRef, magnet, speedRef, doubleActive, obstaclesRef, gameOver }) {
@@ -846,12 +847,17 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
       pattern = COIN_PATTERNS.ARC;
     } else if (obsType === "slide") {
       pattern = COIN_PATTERNS.LOW;
+    } else if (obsType === "lane") {
+      pattern = COIN_PATTERNS.LANE_SHIFT;
     } else {
       pattern = Math.random() < 0.5 ? COIN_PATTERNS.STRAIGHT : COIN_PATTERNS.ARC;
     }
 
-    const clusterSize = pattern === COIN_PATTERNS.STRAIGHT ? 5 : 7;
+    const clusterSize = pattern === COIN_PATTERNS.STRAIGHT ? 5 : 
+                        pattern === COIN_PATTERNS.LANE_SHIFT ? 7 : 7;
     let placed = 0;
+    const COIN_SPACING = 2.2;
+    const baseZ = anchorObs.z - 8;
 
     // Find available coins (not in a cluster and far enough behind)
     for (let i = 0; i < coins.current.length && placed < clusterSize; i++) {
@@ -863,20 +869,26 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
       c.clusterId = placed;
       placed++;
 
-      // Stagger coins behind the obstacle
-      const offset = placed * 0.8;
-      c.z = anchorObs.z + offset;
+      // Forward spacing: each coin gets consistent z offset based on index
+      c.z = baseZ + placed * COIN_SPACING;
 
       if (pattern === COIN_PATTERNS.STRAIGHT) {
         c.x = anchorObs.x;
         c.y = 0.82;
       } else if (pattern === COIN_PATTERNS.ARC) {
-        const t = (placed - 3) / 3;
-        c.x = anchorObs.x + Math.sin(t * Math.PI) * 0.6;
-        c.y = 1.0 + Math.sin(t * Math.PI) * 0.6;
-      } else {
-        c.x = anchorObs.x + (placed - 3) * 0.35;
-        c.y = 0.5 + Math.abs(placed - 3) * 0.08;
+        const half = Math.floor(clusterSize / 2);
+        const t = (placed - half) / half;
+        c.x = anchorObs.x + Math.sin(t * Math.PI) * 0.8;
+        c.y = 1.0 + Math.sin(t * Math.PI) * 0.7;
+      } else if (pattern === COIN_PATTERNS.LOW) {
+        const half = Math.floor(clusterSize / 2);
+        c.x = anchorObs.x + (placed - half) * 0.5;
+        c.y = 0.45 + Math.abs(placed - half) * 0.03;
+      } else if (pattern === COIN_PATTERNS.LANE_SHIFT) {
+        const lanes = [-2, 0, 2];
+        const laneIdx = (placed - 1) % 3;
+        c.x = lanes[laneIdx];
+        c.y = 0.82;
       }
     }
   }
@@ -1723,24 +1735,25 @@ function UIStyles() {
         pointer-events: none;
         user-select: none;
       }
-      .hud-pause {
-        position: absolute;
-        top: 18px;
-        left: 18px;
-        z-index: 1001;
-        width: 42px;
-        height: 42px;
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 12px;
-        background: linear-gradient(90deg, var(--accent), var(--neon));
-        color: white;
-        font-size: 18px;
-        font-weight: 800;
-        cursor: pointer;
-        transition: transform 140ms ease, background 140ms ease;
-      }
-      .hud-pause:hover { transform: scale(1.04); filter: brightness(1.06); }
-      .hud-pause:active { transform: scale(0.97); }
+.hud-pause {
+         position: absolute;
+         top: 18px;
+         left: 18px;
+         z-index: 1001;
+         width: 42px;
+         height: 42px;
+         border: 1px solid rgba(255,255,255,0.18);
+         border-radius: 12px;
+         background: rgba(255,255,255,0.12);
+         backdrop-filter: blur(6px);
+         color: white;
+         font-size: 18px;
+         font-weight: 800;
+         cursor: pointer;
+         transition: transform 120ms ease, background 120ms ease;
+       }
+       .hud-pause:hover { transform: scale(1.06); background: rgba(255,255,255,0.18); }
+       .hud-pause:active { transform: scale(0.94); }
       .hud-powerups {
         position: absolute;
         top: 70px;
@@ -1785,19 +1798,19 @@ function UIStyles() {
         border-radius: 8px;
         background: linear-gradient(90deg, rgba(255,0,110,0.06), rgba(124,58,237,0.06));
       }
-      .pause-overlay {
-        position: absolute;
-        inset: 0;
-        z-index: 1000;
-        display: grid;
-        place-items: center;
-        background: linear-gradient(180deg, rgba(255,0,110,0.12), rgba(124,58,237,0.12));
-        color: rgba(255,255,255,0.95);
-        font-size: 18px;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        pointer-events: none;
-      }
+.pause-overlay {
+         position: absolute;
+         inset: 0;
+         z-index: 1000;
+         display: grid;
+         place-items: center;
+         background: rgba(15, 23, 42, 0.75);
+         color: rgba(255,255,255,0.95);
+         font-size: 18px;
+         font-weight: 700;
+         letter-spacing: 0.06em;
+         cursor: pointer;
+       }
 
       /* Level Complete toast */
       .level-toast {
@@ -2153,7 +2166,7 @@ function ModernHUD({
         </div>
       )}
 
-      {paused && <div className="pause-overlay">PAUSED</div>}
+      {paused && <div className="pause-overlay" onClick={onTogglePause}>PAUSED - TAP TO RESUME</div>}
       
       {/* MISSION Progress HUD */}
       {!paused && (
