@@ -767,13 +767,12 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
       rot: Math.random() * Math.PI * 2,
       inCluster: false,
       clusterId: -1,
-      clusterOffset: 0,
     }))
   );
 
   const groupRefs = useRef([]);
   const coinScaleRefs = useRef(coins.current.map(() => ({ s: 1, t: 0 })));
-  const nextClusterIdRef = useRef(0);
+  const clusterCheckCounterRef = useRef(0);
 
   useFrame((state, delta) => {
     if (!playerRef.current || gameOver) return;
@@ -816,30 +815,57 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
         g.scale.setScalar(coinScaleRefs.current[i]?.s ?? 1);
       }
     });
+
+    // Process pending clusters every 10 frames for performance
+    clusterCheckCounterRef.current++;
+    if (clusterCheckCounterRef.current > 10) {
+      clusterCheckCounterRef.current = 0;
+      if (obstaclesRef?.current) {
+        const pz = playerRef.current.z;
+        // Find obstacles 50-100 units ahead for cluster spawning
+        for (const obs of obstaclesRef.current) {
+          const dist = pz - obs.z;
+          if (dist >= 50 && dist <= 100) {
+            const hasCluster = coins.current.some(c =>
+              Math.abs(c.z - obs.z) < 6 && Math.abs(c.x - obs.x) < 1.2
+            );
+            if (!hasCluster && Math.random() < 0.9) {
+              spawnCoinCluster(obs);
+            }
+          }
+        }
+      }
+    }
   });
 
   function spawnCoinCluster(anchorObs) {
-    const patternRoll = Math.random();
+    const obsType = anchorObs.type;
     let pattern;
-    if (anchorObs.type === "jump") pattern = COIN_PATTERNS.ARC;
-    else if (anchorObs.type === "slide") pattern = COIN_PATTERNS.LOW;
-    else pattern = patternRoll < 0.5 ? COIN_PATTERNS.STRAIGHT : COIN_PATTERNS.ARC;
 
-    const clusterId = nextClusterIdRef.current++;
+    if (obsType === "jump") {
+      pattern = COIN_PATTERNS.ARC;
+    } else if (obsType === "slide") {
+      pattern = COIN_PATTERNS.LOW;
+    } else {
+      pattern = Math.random() < 0.5 ? COIN_PATTERNS.STRAIGHT : COIN_PATTERNS.ARC;
+    }
+
     const clusterSize = pattern === COIN_PATTERNS.STRAIGHT ? 5 : 7;
     let placed = 0;
 
+    // Find available coins (not in a cluster and far enough behind)
     for (let i = 0; i < coins.current.length && placed < clusterSize; i++) {
       const c = coins.current[i];
-      if (c.z > playerRef.current.z - 30) continue;
       if (c.inCluster) continue;
+      if (c.z > anchorObs.z + 10) continue;
 
       c.inCluster = true;
-      c.clusterId = clusterId;
-      c.clusterOffset = placed;
+      c.clusterId = placed;
       placed++;
 
-      c.z = anchorObs.z - (placed * 0.9);
+      // Stagger coins behind the obstacle
+      const offset = placed * 0.8;
+      c.z = anchorObs.z + offset;
 
       if (pattern === COIN_PATTERNS.STRAIGHT) {
         c.x = anchorObs.x;
@@ -847,32 +873,32 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
       } else if (pattern === COIN_PATTERNS.ARC) {
         const t = (placed - 3) / 3;
         c.x = anchorObs.x + Math.sin(t * Math.PI) * 0.6;
-        c.y = 1.2 + Math.sin(t * Math.PI) * 0.8;
+        c.y = 1.0 + Math.sin(t * Math.PI) * 0.6;
       } else {
-        c.x = anchorObs.x + (placed - 3) * 0.4;
-        c.y = 0.4 + Math.abs(placed - 3) * 0.1;
+        c.x = anchorObs.x + (placed - 3) * 0.35;
+        c.y = 0.5 + Math.abs(placed - 3) * 0.08;
       }
     }
   }
 
   function respawnCoin(c) {
     const pz = playerRef.current ? playerRef.current.z : 0;
+    c.inCluster = false;
 
-    if (obstaclesRef && obstaclesRef.current) {
-      const obsAhead = obstaclesRef.current.filter(o => o.z < pz - 25);
-      if (obsAhead.length > 0 && Math.random() < 0.7) {
+    // 70% chance to spawn near an upcoming obstacle
+    if (obstaclesRef?.current && Math.random() < 0.7) {
+      const obsAhead = obstaclesRef.current.filter(o => o.z < pz - 40);
+      if (obsAhead.length > 0) {
         const targetObs = obsAhead[Math.floor(Math.random() * obsAhead.length)];
-        c.inCluster = false;
-        c.clusterId = -1;
-        spawnCoinCluster(targetObs);
+        c.z = targetObs.z + 5;
+        c.x = targetObs.x + (Math.random() - 0.5) * 0.5;
+        c.y = 0.82;
         return;
       }
     }
 
-    c.inCluster = false;
-    c.clusterId = -1;
-
-    c.z = pz - (80 + Math.random() * 120);
+    // Fallback: spawn in a random lane
+    c.z = pz - (100 + Math.random() * 150);
     c.x = LANES[Math.floor(Math.random() * 3)];
     c.y = 0.82;
   }
