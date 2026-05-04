@@ -240,22 +240,13 @@ const THEMES = [
     preview: "#38bdf8"
   },
   {
-    id: "city", name: "Cyber City",
-    bg: "linear-gradient(#0f172a, #334155)", fog: "#334155",
-    floor0: "#1e293b", floor1: "#0f172a",
-    wall0: "#334155", wall1: "#1e293b",
-    trimA0: "#38bdf8", trimA1: "#818cf8", trimA2: "#f472b6",
-    trimB0: "#22d3ee", trimB1: "#a78bfa",
-    preview: "#38bdf8"
-  },
-  {
-    id: "jungle", name: "Jungle Explorer",
-    bg: "linear-gradient(#064e3b, #0f766e)", fog: "#064e3b",
-    floor0: "#14532d", floor1: "#166534",
-    wall0: "#065f46", wall1: "#047857",
-    trimA0: "#10b981", trimA1: "#34d399", trimA2: "#6ee7b7",
-    trimB0: "#84cc16", trimB1: "#a3e635",
-    preview: "#10b981"
+    id: "subway", name: "Subway Tunnel",
+    bg: "linear-gradient(#1a1a1a, #000000)", fog: "#000000",
+    floor0: "#262626", floor1: "#171717",
+    wall0: "#404040", wall1: "#262626",
+    trimA0: "#fbbf24", trimA1: "#d97706", trimA2: "#78350f",
+    trimB0: "#ea580c", trimB1: "#9a3412",
+    preview: "#fbbf24"
   },
   {
     id: "desert", name: "Sahara Gold",
@@ -379,7 +370,6 @@ const BackgroundAnimations = memo(function BackgroundAnimations({ theme, speedRe
       </group>
 
       {theme.id === 'snow' && <SnowParticles playerRef={playerRef} gameOver={gameOver} />}
-      {theme.id === 'jungle' && <JungleLeaves playerRef={playerRef} gameOver={gameOver} />}
       <ParallaxScenery theme={theme} playerRef={playerRef} speedRef={speedRef} gameOver={gameOver} />
     </group>
   );
@@ -460,48 +450,6 @@ const SnowParticles = memo(function SnowParticles({ playerRef, gameOver }) {
   );
 });
 
-const JungleLeaves = memo(function JungleLeaves({ playerRef, gameOver }) {
-  const leaves = useRef(Array.from({ length: 40 }, () => ({
-    x: (Math.random() - 0.5) * 40,
-    y: 5 + Math.random() * 15,
-    z: -Math.random() * 120,
-    speed: 0.5 + Math.random() * 1.5,
-    rotSpeed: (Math.random() - 0.5) * 2,
-    rot: Math.random() * Math.PI * 2
-  })));
-  const ref = useRef();
-
-  useFrame((state, delta) => {
-    if (!ref.current || gameOver) return;
-    const pz = playerRef?.current?.z || 0;
-    leaves.current.forEach((l, i) => {
-      l.y -= l.speed * delta;
-      l.x += Math.sin(state.clock.elapsedTime * 0.5 + i) * 0.05;
-      l.rot += l.rotSpeed * delta;
-      if (l.y < 0) {
-        l.y = 15 + Math.random() * 5;
-        l.z = pz - Math.random() * 120;
-      }
-      const child = ref.current.children[i];
-      if (child) {
-        child.position.set(l.x, l.y, l.z);
-        child.rotation.set(l.rot, l.rot, 0);
-      }
-    });
-  });
-
-  return (
-    <group ref={ref}>
-      {leaves.current.map((_, i) => (
-        <mesh key={i}>
-          <planeGeometry args={[0.3, 0.3]} />
-          <meshBasicMaterial color="#4ade80" transparent opacity={0.8} side={THREE.DoubleSide} />
-        </mesh>
-      ))}
-    </group>
-  );
-});
-
 
 // ---------------- TRACK & ENVIRONMENT (colorful walls) ----------------
 const Track = memo(function Track({ playerRef, theme, gameOver }) {
@@ -539,26 +487,44 @@ const Track = memo(function Track({ playerRef, theme, gameOver }) {
           </mesh>
 
           {/* Side Walls */}
-          <group position={[-6.4, 1.8, 0]}>
-            <mesh>
-              <boxGeometry args={[0.4, 3.6, 18]} />
-              <meshStandardMaterial color={i % 2 ? theme.wall1 : theme.wall0} />
-            </mesh>
-            <mesh position={[0.45, 1.2, 0]} ref={el => neonRefs.current[i * 2] = el}>
-              <boxGeometry args={[0.05, 0.4, 18]} />
-              <meshStandardMaterial color={theme.trimA0} emissive={theme.trimA0} emissiveIntensity={1} />
-            </mesh>
-          </group>
-          <group position={[6.4, 1.8, 0]}>
-            <mesh>
-              <boxGeometry args={[0.4, 3.6, 18]} />
-              <meshStandardMaterial color={i % 2 ? theme.wall1 : theme.wall0} />
-            </mesh>
-            <mesh position={[-0.45, 1.2, 0]} ref={el => neonRefs.current[i * 2 + 1] = el}>
-              <boxGeometry args={[0.05, 0.4, 18]} />
-              <meshStandardMaterial color={theme.trimA1} emissive={theme.trimA1} emissiveIntensity={1} />
-            </mesh>
-          </group>
+          {theme.id !== 'subway' ? (
+            <>
+              <group position={[-6.4, 1.8, 0]}>
+                <mesh>
+                  <boxGeometry args={[0.4, 3.6, 18]} />
+                  <meshStandardMaterial color={i % 2 ? theme.wall1 : theme.wall0} />
+                </mesh>
+                <mesh position={[0.45, 1.2, 0]} ref={el => neonRefs.current[i * 2] = el}>
+                  <boxGeometry args={[0.05, 0.4, 18]} />
+                  <meshStandardMaterial color={theme.trimA0} emissive={theme.trimA0} emissiveIntensity={1} />
+                </mesh>
+              </group>
+              <group position={[6.4, 1.8, 0]}>
+                <mesh>
+                  <boxGeometry args={[0.4, 3.6, 18]} />
+                  <meshStandardMaterial color={i % 2 ? theme.wall1 : theme.wall0} />
+                </mesh>
+                <mesh position={[-0.45, 1.2, 0]} ref={el => neonRefs.current[i * 2 + 1] = el}>
+                  <boxGeometry args={[0.05, 0.4, 18]} />
+                  <meshStandardMaterial color={theme.trimA1} emissive={theme.trimA1} emissiveIntensity={1} />
+                </mesh>
+              </group>
+            </>
+          ) : (
+            /* Subway Tunnel Style */
+            <group>
+              <mesh position={[0, 3.5, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[7, 7, 18, 12, 1, true, Math.PI, Math.PI]} />
+                <meshStandardMaterial color={theme.wall0} side={THREE.BackSide} />
+              </mesh>
+              {i % 3 === 0 && (
+                <mesh position={[0, 3.5, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                  <torusGeometry args={[6.9, 0.15, 8, 24]} />
+                  <meshStandardMaterial color={theme.trimA0} emissive={theme.trimA0} emissiveIntensity={1} />
+                </mesh>
+              )}
+            </group>
+          )}
 
           {/* Ground Detail Lights */}
           <mesh position={[-5.8, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -793,79 +759,21 @@ const COIN_PATTERNS = {
   LANE_SHIFT: 3,
 };
 
-const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoinRef, magnet, speedRef, doubleActive, obstaclesRef, gameOver, spawnCoinsForObstacleRef }) {
+const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoinRef, magnet, speedRef, doubleActive, obstaclesRef, gameOver }) {
   const coins = useRef(
     Array.from({ length: 48 }, () => ({
       x: 0,
-      z: -9999,
+      z: -999,
       y: 0.82,
       rot: Math.random() * Math.PI * 2,
       inCluster: false,
+      clusterId: -1,
     }))
   );
 
   const groupRefs = useRef([]);
   const coinScaleRefs = useRef(coins.current.map(() => ({ s: 1, t: 0 })));
-
-  const spawnCoinsForObstacle = useCallback((anchorObs) => {
-    const obsType = anchorObs.type;
-    let pattern = [];
-
-    if (obsType === "jump") {
-      pattern = [
-        { y: 0.82, z: 0 },
-        { y: 1.8, z: 1 },
-        { y: 2.5, z: 2 },
-        { y: 1.8, z: 3 },
-        { y: 0.82, z: 4 }
-      ];
-    } else if (obsType === "slide") {
-      pattern = [
-        { y: 0.45, z: 0 },
-        { y: 0.45, z: 1 },
-        { y: 0.45, z: 2 }
-      ];
-    } else if (obsType === "lane") {
-      const blocked = anchorObs.lane;
-      const safeLanes = [0, 1, 2].filter(l => l !== blocked);
-      const safe = safeLanes[Math.floor(Math.random() * safeLanes.length)];
-      const center = 1;
-      pattern = [
-        { lane: blocked, z: 0 },
-        { lane: center, z: 1 },
-        { lane: safe, z: 2 }
-      ];
-    }
-
-    let placed = 0;
-    const currentSpeed = speedRef.current || 0.28;
-    const spacing = Math.max(1.8, 2.2 - (currentSpeed - 0.28) * 0.5);
-    const baseZ = anchorObs.z - 8;
-
-    for (let i = 0; i < coins.current.length && placed < pattern.length; i++) {
-      const c = coins.current[i];
-      if (c.inCluster) continue;
-
-      const p = pattern[placed];
-      c.inCluster = true;
-      
-      c.z = baseZ + (p.z * spacing);
-      
-      if (p.lane !== undefined) {
-        c.x = LANES[p.lane];
-        c.y = 0.82;
-      } else {
-        c.x = anchorObs.x;
-        c.y = p.y !== undefined ? p.y : 0.82;
-      }
-      
-      placed++;
-    }
-  }, [speedRef]);
-
-  if (spawnCoinsForObstacleRef) {
-    spawnCoinsForObstacleRef.current = spawnCoinsForObstacle;
-  }
+  const clusterCheckCounterRef = useRef(0);
 
   useFrame((state, delta) => {
     if (!playerRef.current || gameOver) return;
@@ -873,8 +781,6 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
     const pz = playerRef.current.z;
 
     coins.current.forEach((c, i) => {
-      if (!c.inCluster) return;
-
       if (magnet && Math.abs(c.z - pz) < 10) {
         c.x += (playerRef.current.x - c.x) * 0.22;
         c.z += (playerRef.current.z - c.z) * 0.22;
@@ -892,8 +798,7 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
         addScoreRef?.current && addScoreRef.current(doubleActive ? 20 : 10, "coin");
         addCoinsRef?.current && addCoinsRef.current(1);
         if (coinScaleRefs.current[i]) coinScaleRefs.current[i] = { s: 1.9, t: 1 };
-        c.inCluster = false;
-        c.z = -9999;
+        respawnCoin(c);
       }
 
       const cs = coinScaleRefs.current[i];
@@ -902,20 +807,113 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
         cs.s = 1 + (cs.s - 1) * (1 - Math.pow(1 - cs.t, 2));
       }
 
-      if (c.z > pz + 26) {
-        c.inCluster = false;
-        c.z = -9999;
-      }
+      if (c.z > pz + 26) respawnCoin(c);
 
       const g = groupRefs.current[i];
       if (g) {
-        g.visible = c.inCluster;
         g.position.set(c.x, c.y, c.z);
         g.rotation.set(0, c.rot, 0);
         g.scale.setScalar(coinScaleRefs.current[i]?.s ?? 1);
       }
     });
+
+    // Process pending clusters every 10 frames for performance
+    clusterCheckCounterRef.current++;
+    if (clusterCheckCounterRef.current > 10) {
+      clusterCheckCounterRef.current = 0;
+      if (obstaclesRef?.current) {
+        const pz = playerRef.current.z;
+        // Find obstacles 50-100 units ahead for cluster spawning
+        for (const obs of obstaclesRef.current) {
+          const dist = pz - obs.z;
+          if (dist >= 50 && dist <= 100) {
+            const hasCluster = coins.current.some(c =>
+              Math.abs(c.z - obs.z) < 6 && Math.abs(c.x - obs.x) < 1.2
+            );
+            if (!hasCluster && Math.random() < 0.9) {
+              spawnCoinCluster(obs);
+            }
+          }
+        }
+      }
+    }
   });
+
+  function spawnCoinCluster(anchorObs) {
+    const obsType = anchorObs.type;
+    let pattern;
+
+    if (obsType === "jump") {
+      pattern = COIN_PATTERNS.ARC;
+    } else if (obsType === "slide") {
+      pattern = COIN_PATTERNS.LOW;
+    } else if (obsType === "lane") {
+      pattern = COIN_PATTERNS.LANE_SHIFT;
+    } else {
+      pattern = Math.random() < 0.5 ? COIN_PATTERNS.STRAIGHT : COIN_PATTERNS.ARC;
+    }
+
+    const clusterSize = pattern === COIN_PATTERNS.STRAIGHT ? 5 : 
+                        pattern === COIN_PATTERNS.LANE_SHIFT ? 7 : 7;
+    let placed = 0;
+    const COIN_SPACING = 2.2;
+    const baseZ = anchorObs.z - 8;
+
+    // Find available coins (not in a cluster and far enough behind)
+    for (let i = 0; i < coins.current.length && placed < clusterSize; i++) {
+      const c = coins.current[i];
+      if (c.inCluster) continue;
+      if (c.z > anchorObs.z + 10) continue;
+
+      c.inCluster = true;
+      c.clusterId = placed;
+      placed++;
+
+      // Forward spacing: each coin gets consistent z offset based on index
+      c.z = baseZ + placed * COIN_SPACING;
+
+      if (pattern === COIN_PATTERNS.STRAIGHT) {
+        c.x = anchorObs.x;
+        c.y = 0.82;
+      } else if (pattern === COIN_PATTERNS.ARC) {
+        const half = Math.floor(clusterSize / 2);
+        const t = (placed - half) / half;
+        c.x = anchorObs.x + Math.sin(t * Math.PI) * 0.8;
+        c.y = 1.0 + Math.sin(t * Math.PI) * 0.7;
+      } else if (pattern === COIN_PATTERNS.LOW) {
+        const half = Math.floor(clusterSize / 2);
+        c.x = anchorObs.x + (placed - half) * 0.5;
+        c.y = 0.45 + Math.abs(placed - half) * 0.03;
+      } else if (pattern === COIN_PATTERNS.LANE_SHIFT) {
+        const lanes = [-2, 0, 2];
+        const laneIdx = (placed - 1) % 3;
+        c.x = lanes[laneIdx];
+        c.y = 0.82;
+      }
+    }
+  }
+
+  function respawnCoin(c) {
+    const pz = playerRef.current ? playerRef.current.z : 0;
+    c.inCluster = false;
+
+    // 70% chance to spawn near an upcoming obstacle
+    if (obstaclesRef?.current && Math.random() < 0.7) {
+      const obsAhead = obstaclesRef.current.filter(o => o.z < pz - 40);
+      if (obsAhead.length > 0) {
+        const targetObs = obsAhead[Math.floor(Math.random() * obsAhead.length)];
+        c.z = targetObs.z + 5;
+        c.x = targetObs.x + (Math.random() - 0.5) * 0.5;
+        c.y = 0.82;
+        return;
+      }
+    }
+
+    // Fallback: spawn in a random lane
+    c.z = pz - (100 + Math.random() * 150);
+    c.x = LANES[Math.floor(Math.random() * 3)];
+    c.y = 0.82;
+  }
 
   return coins.current.map((c, i) => (
     <group
@@ -951,7 +949,6 @@ const Obstacles = memo(function Obstacles({
   missionRef,
   finalizeMissionCompletion,
   obstaclesRef, // Shared ref
-  spawnCoinsForObstacleRef,
 }) {
   // Types: jump (barrier), slide (tunnel), lane (train/wall)
   const obs = obstaclesRef;
@@ -1021,9 +1018,6 @@ const Obstacles = memo(function Obstacles({
       o.lane = step.lane;
       o.x = LANES[step.lane];
       o.z = startZ - i * spacing;
-      if (spawnCoinsForObstacleRef?.current) {
-        spawnCoinsForObstacleRef.current(o);
-      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1129,10 +1123,6 @@ const Obstacles = memo(function Obstacles({
     o.lane = step.lane;
     o.x = LANES[step.lane];
     o.type = step.type;
-
-    if (spawnCoinsForObstacleRef?.current) {
-      spawnCoinsForObstacleRef.current(o);
-    }
   }
 
   function triggerNearMissSlowMo() {
@@ -1285,7 +1275,7 @@ const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activate
 const POWERUP_SPAWN_INTERVAL = 4500;
 const POWERUP_SAFE_CLEARANCE = 30;
 
-const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, activateMysteryRef, playPowerupRef, gameOver, obstaclesRef, speedRef }) {
+const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, playPowerupRef, gameOver, obstaclesRef, speedRef }) {
   const ups = useRef(
     Array.from({ length: 2 }, (_, i) => ({
       type: i === 0 ? "double" : "hover",
@@ -1331,12 +1321,10 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
         playPowerupRef?.current && playPowerupRef.current();
         if (u.type === "double") activateDoubleRef?.current && activateDoubleRef.current();
         else if (u.type === "hover") activateHoverRef?.current && activateHoverRef.current();
-        else if (u.type === "mystery") activateMysteryRef?.current && activateMysteryRef.current();
 
         u.z = pz - (7000 + Math.random() * 10000);
         u.x = LANES[Math.floor(Math.random() * 3)];
-        const rand = Math.random();
-        u.type = rand < 0.1 ? "mystery" : rand < 0.6 ? "double" : "hover";
+        u.type = Math.random() < 0.65 ? "double" : "hover";
         u.pattern = Math.floor(Math.random() * 4);
         lastSpawnRef.current = now;
       }
@@ -1372,8 +1360,7 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
           u.z = pz - (5000 + Math.random() * 8000);
           u.x = LANES[Math.floor(Math.random() * 3)];
         }
-        const rand = Math.random();
-        u.type = rand < 0.1 ? "mystery" : rand < 0.6 ? "double" : "hover";
+        u.type = Math.random() < 0.65 ? "double" : "hover";
         u.pattern = Math.floor(Math.random() * 4);
       }
 
@@ -1408,20 +1395,6 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
           <mesh position={[0, 0.08, 0]}>
             <sphereGeometry args={[0.06, 8, 8]} />
             <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.6} />
-          </mesh>
-        </group>
-      );
-    }
-    if (u.type === "mystery") {
-      return (
-        <group key={i} ref={(el) => (groupRefs.current[i] = el)} position={[u.x, y, u.z]}>
-          <mesh rotation={[Math.PI / 4, Math.PI / 4, 0]}>
-            <boxGeometry args={[0.35, 0.35, 0.35]} />
-            <meshStandardMaterial color="#ec4899" emissive="#ec4899" emissiveIntensity={0.8} />
-          </mesh>
-          <mesh position={[0, 0, 0]}>
-            <boxGeometry args={[0.4, 0.05, 0.4]} />
-            <meshStandardMaterial color="#fff" />
           </mesh>
         </group>
       );
@@ -1685,22 +1658,15 @@ function UIStyles() {
         gap: 14px;
         align-items: center;
         justify-content: center;
-        padding: 16px 28px;
+        padding: 12px 22px;
         border-radius: 12px;
         background: linear-gradient(90deg, var(--accent), var(--neon));
         border: 1px solid rgba(255,255,255,0.06);
         color: white;
         cursor: pointer;
         font-weight: 700;
-        font-size: 18px;
+        font-size: 16px;
         transition: transform 160ms ease, box-shadow 160ms ease;
-      }
-      
-      button {
-        touch-action: manipulation;
-        pointer-events: auto;
-        position: relative;
-        z-index: 99999;
       }
 
       .start-cta:active { transform: translateY(1px) scale(0.995); }
@@ -2595,43 +2561,27 @@ function MissionOverlay({ open, onClose, dailyMissions, lifetimeMilestones, life
 // ---------------- MYSTERY BOX OVERLAY ----------------
 function MysteryBoxOverlay({ open, reward, onOpen, onUIButtonClick }) {
   const [opening, setOpening] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setOpening(false);
-      setRevealed(false);
-    }
-  }, [open]);
-
   if (!open) return null;
 
   return (
     <div className="shop-overlay" style={{ zIndex: 13000 }}>
       <div className="start-bg" style={{ opacity: 0.95, background: "rgba(2, 6, 23, 0.98)" }} />
-      <div className="start-card" style={{ transform: opening && !revealed ? "scale(1.1)" : "scale(1)", transition: "transform 0.5s" }}>
-        <div style={{ fontSize: 80, marginBottom: 20, animation: opening && !revealed ? "boxShake 0.5s infinite" : "none" }}>
-          {revealed ? "🎉" : "🎁"}
-        </div>
-        <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 10 }}>
-          {revealed ? `You won +${reward?.value || 0} Coins!` : "You found a Mystery Box!"}
-        </div>
+      <div className="start-card" style={{ transform: opening ? "scale(1.1)" : "scale(1)", transition: "transform 0.5s" }}>
+        <div style={{ fontSize: 80, marginBottom: 20, animation: opening ? "boxShake 0.5s infinite" : "none" }}>🎁</div>
+        <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 10 }}>You found a Mystery Box!</div>
         <button 
           className="start-cta" 
           onClick={() => {
+            setOpening(true);
             onUIButtonClick();
-            if (revealed) {
+            setTimeout(() => {
               onOpen();
-            } else {
-              setOpening(true);
-              setTimeout(() => {
-                setRevealed(true);
-              }, 300);
-            }
+              setOpening(false);
+            }, 1000);
           }}
-          disabled={opening && !revealed}
+          disabled={opening}
         >
-          {revealed ? "CLAIM" : opening ? "Opening..." : "OPEN BOX"}
+          {opening ? "Opening..." : "OPEN BOX"}
         </button>
         <style>{`
           @keyframes boxShake {
@@ -2781,7 +2731,6 @@ export default function App() {
   const playerRef = useRef(null);
   const speedRef = useRef(0.28); 
   const obstaclesRef = useRef(Array.from({ length: 12 }, () => ({ x: 0, z: -999, type: "jump", lane: 1 })));
-  const spawnCoinsForObstacleRef = useRef(null);
 
   // Floating text & flash refs
   const spawnTextRef = useRef(null);       // set by FloatingTextsProvider context (wired by SpawnTextWire)
@@ -2806,7 +2755,6 @@ export default function App() {
   const activateShieldRef = useRef(null);
   const activateDoubleRef = useRef(null);
   const activateHoverRef = useRef(null);
-  const activateMysteryRef = useRef(null);
   const playCoinAudioRef = useRef(null);
 
   // constants for durations (ms)
@@ -2954,24 +2902,6 @@ export default function App() {
     hoverboardRef.current = true;
     setHoverboardActive(true);
   }, []);
-
-  const activateMysteryBox = useCallback(() => {
-    const r = Math.random();
-    let text = "";
-    if (r < 0.33) {
-      addCoins(100);
-      text = "+100 Coins!";
-    } else if (r < 0.66) {
-      activateDoubleCoins(10000); 
-      text = "2x Coins!";
-    } else {
-      activateHoverboard();
-      text = "Hoverboard!";
-    }
-    if (spawnTextRef.current) {
-      spawnTextRef.current(text, { x: 50, y: 30, color: "#ec4899", size: 28 });
-    }
-  }, [addCoins, activateDoubleCoins, activateHoverboard]);
 
   const triggerCombo = useCallback(() => {
     comboRef.current = Math.min(20, comboRef.current + 1);
@@ -3132,7 +3062,6 @@ export default function App() {
     let swipeThreshold = 40;
 
     function touchStart(e) {
-      if (e.target.closest('button')) return;
       if (e.cancelable) e.preventDefault();
       const t = e.touches ? e.touches[0] : e;
       startX = t.clientX;
@@ -3140,12 +3069,10 @@ export default function App() {
     }
 
     function touchMove(e) {
-      if (e.target.closest('button')) return;
       if (e.cancelable) e.preventDefault();
     }
 
     function touchEnd(e) {
-      if (e.target.closest('button')) return;
       if (e.cancelable) e.preventDefault();
       if (!started || gameOver || paused) return;
       const t = e.changedTouches ? e.changedTouches[0] : e;
@@ -3542,7 +3469,6 @@ export default function App() {
     activateShieldRef.current = activateShield;
     activateDoubleRef.current = activateDoubleCoins;
     activateHoverRef.current = activateHoverboard;
-    activateMysteryRef.current = activateMysteryBox;
     playCoinAudioRef.current = audio.refs?.coinRef;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audio, upgrades]);
@@ -3688,18 +3614,6 @@ export default function App() {
             />
             <BackgroundAnimations theme={THEMES[themeIndex]} speedRef={speedRef} playerRef={playerRef} gameOver={gameOver || paused} />
             <Track playerRef={playerRef} theme={THEMES[themeIndex]} gameOver={gameOver || paused} />
-            <Coins
-              playerRef={playerRef}
-              addScoreRef={addScoreRef}
-              addCoinsRef={addCoinsRef}
-              playCoinRef={playCoinRef}
-              magnet={magnet}
-              speedRef={speedRef}
-              doubleActive={doubleActive}
-              obstaclesRef={obstaclesRef}
-              gameOver={gameOver || paused}
-              spawnCoinsForObstacleRef={spawnCoinsForObstacleRef}
-            />
             <Obstacles
               playerRef={playerRef}
               gameOver={gameOver || paused}
@@ -3721,11 +3635,21 @@ export default function App() {
               missionRef={missionRef}
               finalizeMissionCompletion={finalizeMissionCompletion}
               obstaclesRef={obstaclesRef}
-              spawnCoinsForObstacleRef={spawnCoinsForObstacleRef}
+            />
+            <Coins
+              playerRef={playerRef}
+              addScoreRef={addScoreRef}
+              addCoinsRef={addCoinsRef}
+              playCoinRef={playCoinRef}
+              magnet={magnet}
+              speedRef={speedRef}
+              doubleActive={doubleActive}
+              obstaclesRef={obstaclesRef}
+              gameOver={gameOver || paused}
             />
             <Boosters playerRef={playerRef} activateMagnetRef={activateMagnetRef} activateShieldRef={activateShieldRef} playShieldRef={playShieldRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} />
 
-            <PowerUps playerRef={playerRef} activateDoubleRef={activateDoubleRef} activateHoverRef={activateHoverRef} activateMysteryRef={activateMysteryRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} obstaclesRef={obstaclesRef} speedRef={speedRef} />
+            <PowerUps playerRef={playerRef} activateDoubleRef={activateDoubleRef} activateHoverRef={activateHoverRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} obstaclesRef={obstaclesRef} speedRef={speedRef} />
 
             <SpeedLines playerRef={playerRef} speedRef={speedRef} gameOver={gameOver || paused} />
             <RunnerFX playerRef={playerRef} speedRef={speedRef} crashSignal={crashSignal} gameOver={gameOver || paused} />
