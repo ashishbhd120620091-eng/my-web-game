@@ -2236,7 +2236,7 @@ function ThemePanel({ current, onSelect }) {
 
 
 // Start Screen
-function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonClick, onToggleTheme }) {
+function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonClick, onToggleTheme, level, missionUI }) {
   useEffect(() => {
     function key(e) {
       if (started) return;
@@ -2267,6 +2267,12 @@ function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonC
           <div style={{ textAlign: "left" }}>
             <div className="start-title">SUBWAY RUNNER</div>
             <div style={{ color: "rgba(255,255,255,0.85)", fontWeight: 700, fontSize: 15 }}>First Web Game of Ashish</div>
+            {level && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ color: "#ffd166", fontWeight: 800, fontSize: 16 }}>LEVEL {level}</div>
+                {missionUI?.short && <div style={{ color: "#a78bfa", fontWeight: 600, fontSize: 13 }}>Mission: {missionUI.short}</div>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -2704,8 +2710,8 @@ export default function App() {
   const [hoverboardActive, setHoverboardActive] = useState(false);
 
   // LEVEL + MISSION
-  const [, setLevel] = useState(1);
-  const levelRef = useRef(1);
+  const [level, setLevel] = useState(() => parseInt(localStorage.getItem("game_level") || "1", 10));
+  const levelRef = useRef(parseInt(localStorage.getItem("game_level") || "1", 10));
 
   const missionRef = useRef(null);
   const [missionUI, setMissionUI] = useState({ short: "", desc: "", progress: "", percent: 0 });
@@ -3015,16 +3021,33 @@ export default function App() {
     slideCountRef.current = 0;
     levelStartTimeRef.current = Date.now();
 
-    // Easy, quick-complete missions that rotate
-    const missions = [
-      { type: "coins", target: 25, desc: "Collect 25 coins", short: "Collect 25 coins" },
-      { type: "jumps", target: 10, desc: "Clear 10 jump obstacles", short: "10 Jumps" },
-      { type: "slides", target: 10, desc: "Clear 10 slide obstacles", short: "10 Slides" },
-      { type: "time", target: 45, desc: "Survive 45 seconds", short: "Survive 45s" },
-      { type: "slides_run", target: 5, desc: "Perform 5 slides in one run", short: "5 Slides" },
+    const lvCoins = 20 + Math.floor(lv * 2);
+    const lvJumps = 5 + Math.floor(lv * 0.4);
+    const lvSlides = 5 + Math.floor(lv * 0.4);
+    const lvNearMisses = 2 + Math.floor(lv * 0.2);
+    const lvTime = 20 + Math.floor(lv * 1);
+
+    const pool = [
+      { type: "coins", target: lvCoins, desc: `Collect ${lvCoins} coins`, short: `Collect ${lvCoins} coins` },
+      { type: "jumps", target: lvJumps, desc: `Do ${lvJumps} jumps`, short: `${lvJumps} Jumps` },
+      { type: "slides", target: lvSlides, desc: `Do ${lvSlides} slides`, short: `${lvSlides} Slides` },
+      { type: "near_misses", target: lvNearMisses, desc: `Perform ${lvNearMisses} near-misses`, short: `${lvNearMisses} Near-Misses` },
+      { type: "time", target: lvTime, desc: `Survive ${lvTime} seconds`, short: `Survive ${lvTime}s` }
     ];
     
-    const m = missions[(lv - 1) % missions.length];
+    if (lv % 2 === 0) {
+      const p1 = pool[(lv) % pool.length];
+      const p2 = pool[(lv + 2) % pool.length];
+      return {
+         type: "mix",
+         parts: [ { ...p1, progress: 0 }, { ...p2, progress: 0 } ],
+         desc: `Complete 2 tasks: ${p1.short} & ${p2.short}`,
+         short: `Mix: ${p1.short} & ${p2.short}`,
+         progress: 0
+      };
+    }
+
+    const m = pool[(lv - 1) % pool.length];
     return { ...m, progress: 0 };
   }
 
@@ -3045,7 +3068,10 @@ export default function App() {
         const nextLevel = Math.max(1, (levelRef.current || 1) + 1);
         setLevel(nextLevel);
         levelRef.current = nextLevel;
+        try { localStorage.setItem("game_level", String(nextLevel)); } catch {}
         startMissionForLevel(nextLevel);
+        // Slightly increase player speed after each level
+        speedRef.current = speedRef.current + 0.005;
         setTimeout(() => {
           levelTransitioningRef.current = false;
         }, 300);
@@ -3339,6 +3365,22 @@ export default function App() {
         setNearMissFlash(v => v + 1);
         setRunNearMisses(prev => prev + 1);
       } catch {}
+
+      const m = missionRef.current;
+      if (m && m.type === "near_misses") {
+        m.progress = (m.progress || 0) + 1;
+        if (m.progress >= m.target && !missionCompletedRef.current) {
+          finalizeMissionCompletion(m);
+        }
+      } else if (m && m.type === "mix") {
+        const part = m.parts.find(p => p.type === "near_misses");
+        if (part) {
+          part.progress = (part.progress || 0) + 1;
+          if (m.parts.every(pt => (pt.type === "time" ? Math.floor((Date.now() - levelStartTimeRef.current) / 1000) >= pt.target : (pt.progress || 0) >= pt.target))) {
+            finalizeMissionCompletion(m);
+          }
+        }
+      }
     }
   }
 
@@ -3463,7 +3505,8 @@ export default function App() {
     setScore(0);
     setShield(false);
     setMagnet(false);
-    speedRef.current = 0.28;
+    const storedLevel = parseInt(localStorage.getItem("game_level") || "1", 10);
+    speedRef.current = 0.28 + (storedLevel * 0.005);
 
     // reset player position if exists to avoid stuck state
     if (playerRef.current) {
@@ -3485,9 +3528,10 @@ export default function App() {
     playBgm && playBgm();
 
     // reset level & mission
-    setLevel(1);
-    levelRef.current = 1;
-    startMissionForLevel(1);
+    const storedLevelForMission = parseInt(localStorage.getItem("game_level") || "1", 10);
+    setLevel(storedLevelForMission);
+    levelRef.current = storedLevelForMission;
+    startMissionForLevel(storedLevelForMission);
     missionCompletedRef.current = false;
   };
 
@@ -3495,10 +3539,11 @@ export default function App() {
     incrementStreak();
     setStarted(true);
     setRestartKey((k) => k + 1);
-    setLevel(1);
-    levelRef.current = 1;
-    startMissionForLevel(1);
-    speedRef.current = 0.28;
+    const storedLevel = parseInt(localStorage.getItem("game_level") || "1", 10);
+    setLevel(storedLevel);
+    levelRef.current = storedLevel;
+    startMissionForLevel(storedLevel);
+    speedRef.current = 0.28 + (storedLevel * 0.005);
 
     scoreRef.current = 0;
     setScore(0);
@@ -3519,7 +3564,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    startMissionForLevel(1);
+    const storedLevel = parseInt(localStorage.getItem("game_level") || "1", 10);
+    startMissionForLevel(storedLevel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3622,6 +3668,8 @@ export default function App() {
             onOpenMissions={() => setMissionsOpen(true)}
             onUIButtonClick={playClick} 
             onToggleTheme={() => setShowThemePanel(v => !v)} 
+            level={level}
+            missionUI={missionUI}
           />
           {showThemePanel && (
             <ThemePanel 
