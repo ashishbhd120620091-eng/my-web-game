@@ -5,6 +5,14 @@ import { useMissionEventSystem, useMysteryBoxSystem } from "./MissionSystem";
 
 const LANES = [-2, 0, 2];
 
+const SKINS = [
+  { id: "default", name: "Classic", colors: { body: "#ff4d6d", head: "#ffd166", legs: "#111827", arm: "#ff7aa2" } },
+  { id: "neon", name: "Neon", colors: { body: "#00f5d4", head: "#ffd166", legs: "#111827", arm: "#00f5d4" } },
+  { id: "sunset", name: "Sunset", colors: { body: "#f15bb5", head: "#fee440", legs: "#111827", arm: "#f15bb5" } },
+  { id: "shadow", name: "Shadow", colors: { body: "#333333", head: "#666666", legs: "#111111", arm: "#333333" } },
+  { id: "hero", name: "Hero", colors: { body: "#3a86ff", head: "#ffd166", legs: "#111827", arm: "#3a86ff" } },
+];
+
 // ---------------- CHARACTER ----------------
 const Character = memo(function Character({
   laneRef,
@@ -2133,27 +2141,8 @@ return (
         >
           🎨
         </button>
-      </div>
-          className="hud-pause hud-fade"
-          onClick={() => {
-            onUIButtonClick && onUIButtonClick();
-            onTogglePause && onTogglePause();
-          }}
-          aria-label={paused ? "Resume game" : "Pause game"}
-        >
-          {paused ? "▶" : "Ⅱ"}
-        </button>
 
-<button
-           className="hud-pause hud-fade"
-           onClick={() => {
-             onUIButtonClick && onUIButtonClick();
-             onToggleTheme && onToggleTheme();
-           }}
-           title="Switch Theme"
-         >
-           🎨
-         </button>
+        <button
           className="hud-pause hud-fade"
           onClick={() => {
             onUIButtonClick && onUIButtonClick();
@@ -2236,23 +2225,18 @@ function ThemePanel({ current, onSelect }) {
 
 
 // Start Screen
-function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonClick, onToggleTheme, level, missionUI }) {
+function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onOpenCollection, onOpenLevels, onUIButtonClick, onToggleTheme, level, missionUI }) {
   useEffect(() => {
+    console.log("StartScreen Active");
     function key(e) {
       if (started) return;
       if (e.code === "Space" || e.key === " ") {
         onStart && onStart();
       }
     }
-    function tap(e) {
-      if (started) return;
-      onStart && onStart();
-    }
     window.addEventListener("keydown", key);
-    window.addEventListener("touchstart", tap, { passive: true });
     return () => {
       window.removeEventListener("keydown", key);
-      window.removeEventListener("touchstart", tap);
     };
   }, [started, onStart]);
 
@@ -2276,17 +2260,21 @@ function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonC
           </div>
         </div>
 
-        <div style={{ marginTop: 18 }}>
-          <div className="start-sub">Jump, slide and dodge — collect coins and boosters. <br />Press Space or Tap to Start</div>
-
-          <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
+        <div style={{ marginTop: 24 }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
             <button
               className="start-cta"
               onClick={() => {
                 onUIButtonClick && onUIButtonClick();
                 onStart && onStart();
               }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                onUIButtonClick && onUIButtonClick();
+                onStart && onStart();
+              }}
               aria-label="Start game"
+              style={{ minWidth: 140 }}
             >
               <span style={{ display: "inline-block", width: 18 }}>▶</span>
               <span style={{ fontWeight: 800 }}>Play</span>
@@ -2297,17 +2285,50 @@ function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonC
                 onUIButtonClick && onUIButtonClick();
                 onOpenMissions && onOpenMissions();
               }}
-              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                onUIButtonClick && onUIButtonClick();
+                onOpenMissions && onOpenMissions();
+              }}
+              style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", minWidth: 140 }}
             >
               Missions
             </button>
             <button
               className="start-cta"
-              onPointerDown={(e) => {
+              onClick={() => {
+                onUIButtonClick && onUIButtonClick();
+                onOpenCollection && onOpenCollection();
+              }}
+              onTouchStart={(e) => {
                 e.stopPropagation();
                 onUIButtonClick && onUIButtonClick();
-                onOpenShop && onOpenShop();
+                onOpenCollection && onOpenCollection();
               }}
+              style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", minWidth: 140 }}
+            >
+              Collection
+            </button>
+            <button
+              className="start-cta"
+              onClick={() => {
+                onUIButtonClick && onUIButtonClick();
+                onOpenLevels && onOpenLevels();
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                onUIButtonClick && onUIButtonClick();
+                onOpenLevels && onOpenLevels();
+              }}
+              style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", minWidth: 140 }}
+            >
+              Levels
+            </button>
+          </div>
+
+          <div style={{ marginTop: 20, display: "flex", justifyContent: "center", gap: 12 }}>
+            <button
+              className="btn-ghost"
               onClick={(e) => {
                 e.stopPropagation();
                 onUIButtonClick && onUIButtonClick();
@@ -2318,13 +2339,10 @@ function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonC
                 onUIButtonClick && onUIButtonClick();
                 onOpenShop && onOpenShop();
               }}
-              style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02))" }}
+              style={{ padding: "10px 20px", fontSize: 15 }}
             >
-              Shop
+              🛒 Shop
             </button>
-          </div>
-
-          <div style={{ marginTop: 16 }}>
             <button
               className="btn-ghost"
               onClick={(e) => {
@@ -2332,14 +2350,16 @@ function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onUIButtonC
                 onUIButtonClick && onUIButtonClick();
                 onToggleTheme && onToggleTheme();
               }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                onUIButtonClick && onUIButtonClick();
+                onToggleTheme && onToggleTheme();
+              }}
+              style={{ padding: "10px 20px", fontSize: 15 }}
             >
-              🎨 Switch Theme
+              🎨 Themes
             </button>
           </div>
-
-          <div className="hint">Press Space / Tap to start — or use the Play button</div>
-
-          <div className="dev-note">This game is in development phase. Some bugs and faults may occur.</div>
         </div>
       </div>
     </div>
@@ -2652,6 +2672,98 @@ function MysteryBoxOverlay({ open, reward, onOpen, onUIButtonClick }) {
   );
 }
 
+// ---------------- COLLECTION PANEL ----------------
+function CollectionPanel({ open, onClose, unlockedSkins, selectedSkin, onSelectSkin, onUIButtonClick }) {
+  if (!open) return null;
+  return (
+    <div className="shop-overlay" style={{ zIndex: 12000 }}>
+      <div className="start-bg" style={{ opacity: 0.95 }} onClick={onClose} />
+      <div className="start-card" style={{ maxWidth: 450, width: "90%", background: "rgba(15, 23, 42, 0.95)", border: "1px solid var(--accent)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0, color: "var(--accent)", fontSize: 24, fontWeight: 900 }}>Collection</h2>
+          <button className="btn-ghost" onClick={onClose} style={{ fontSize: 28, padding: "0 10px" }}>×</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 15, maxHeight: 400, overflowY: "auto", padding: "10px 5px" }}>
+          {SKINS.map(skin => {
+            const isUnlocked = unlockedSkins.includes(skin.id);
+            const isSelected = selectedSkin === skin.id;
+            return (
+              <div 
+                key={skin.id}
+                onClick={() => isUnlocked && onSelectSkin(skin.id)}
+                style={{
+                  padding: "15px 10px",
+                  borderRadius: 16,
+                  background: isSelected ? "rgba(255, 0, 110, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                  border: isSelected ? "2px solid var(--accent)" : "2px solid rgba(255, 255, 255, 0.1)",
+                  cursor: isUnlocked ? "pointer" : "default",
+                  opacity: isUnlocked ? 1 : 0.4,
+                  textAlign: "center",
+                  transition: "all 0.2s",
+                  transform: isSelected ? "scale(1.05)" : "scale(1)"
+                }}
+              >
+                <div style={{ fontSize: 32, marginBottom: 8, filter: isUnlocked ? "none" : "grayscale(1) blur(2px)" }}>
+                  {skin.id === "default" ? "🏃" : skin.id === "neon" ? "⚡" : skin.id === "sunset" ? "🌅" : skin.id === "shadow" ? "👤" : "🦸"}
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>{skin.name}</div>
+                {!isUnlocked && <div style={{ fontSize: 10, marginTop: 4, opacity: 0.6 }}>Locked</div>}
+                {isSelected && <div style={{ fontSize: 10, marginTop: 4, color: "var(--accent)", fontWeight: 800 }}>ACTIVE</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- LEVELS PANEL ----------------
+function LevelsPanel({ open, onClose, currentLevel, unlockedLevels, onSelectLevel, onUIButtonClick }) {
+  if (!open) return null;
+  return (
+    <div className="shop-overlay" style={{ zIndex: 12000 }}>
+      <div className="start-bg" style={{ opacity: 0.95 }} onClick={onClose} />
+      <div className="start-card" style={{ maxWidth: 500, width: "95%", background: "rgba(15, 23, 42, 0.95)", border: "1px solid #ffd166" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0, color: "#ffd166", fontSize: 24, fontWeight: 900 }}>Levels 1-100</h2>
+          <button className="btn-ghost" onClick={onClose} style={{ fontSize: 28, padding: "0 10px" }}>×</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, maxHeight: 450, overflowY: "auto", padding: "10px 5px" }}>
+          {Array.from({ length: 100 }, (_, i) => i + 1).map(lv => {
+            const isUnlocked = unlockedLevels.includes(lv);
+            const isCurrent = currentLevel === lv;
+            return (
+              <div 
+                key={lv}
+                onClick={() => isUnlocked && onSelectLevel(lv)}
+                style={{
+                  aspectRatio: "1/1",
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: 12,
+                  background: isCurrent ? "#ffd166" : isUnlocked ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.3)",
+                  border: isCurrent ? "none" : isUnlocked ? "1px solid rgba(255, 255, 255, 0.2)" : "none",
+                  cursor: isUnlocked ? "pointer" : "default",
+                  opacity: isUnlocked ? 1 : 0.5,
+                  fontWeight: 900,
+                  fontSize: 18,
+                  color: isCurrent ? "#000" : isUnlocked ? "#fff" : "#666",
+                  transition: "all 0.2s",
+                  transform: isCurrent ? "scale(1.1)" : "scale(1)",
+                  boxShadow: isCurrent ? "0 0 20px rgba(255, 209, 102, 0.4)" : "none"
+                }}
+              >
+                {isUnlocked ? lv : "🔒"}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------- EVENT BANNER ----------------
 function EventBanner({ event }) {
   if (!event) return null;
@@ -2675,6 +2787,24 @@ export default function App() {
   const jumpRef = useRef(false);
   const jumpStartRef = useRef(0);
   const slideRef = useRef(0);
+
+  const [unlockedLevels, setUnlockedLevels] = useState(() => {
+    try {
+      const stored = localStorage.getItem("game_unlocked_levels");
+      return stored ? JSON.parse(stored) : [1];
+    } catch { return [1]; }
+  });
+
+  const [selectedSkin, setSelectedSkin] = useState(() => localStorage.getItem("game_selected_skin") || "default");
+  const [unlockedSkins, setUnlockedSkins] = useState(() => {
+    try {
+      const stored = localStorage.getItem("game_unlocked_skins");
+      return stored ? JSON.parse(stored) : ["default"];
+    } catch { return ["default"]; }
+  });
+
+  const [collectionOpen, setCollectionOpen] = useState(false);
+  const [levelsOpen, setLevelsOpen] = useState(false);
 
   const [score, setScore] = useState(0);
   const scoreRef = useRef(0);
@@ -3082,6 +3212,32 @@ useEffect(() => {
         setLevel(nextLevel);
         levelRef.current = nextLevel;
         try { localStorage.setItem("game_level", String(nextLevel)); } catch {}
+
+        // Unlock next level in grid
+        setUnlockedLevels(prev => {
+          if (!prev.includes(nextLevel)) {
+            const next = [...prev, nextLevel];
+            localStorage.setItem("game_unlocked_levels", JSON.stringify(next));
+            return next;
+          }
+          return prev;
+        });
+
+        // Unlock new skins every 10 levels
+        if (nextLevel % 10 === 1) {
+          const skinToUnlock = SKINS[Math.floor(nextLevel / 10)]?.id;
+          if (skinToUnlock) {
+            setUnlockedSkins(prev => {
+              if (!prev.includes(skinToUnlock)) {
+                const next = [...prev, skinToUnlock];
+                localStorage.setItem("game_unlocked_skins", JSON.stringify(next));
+                return next;
+              }
+              return prev;
+            });
+          }
+        }
+
         startMissionForLevel(nextLevel);
         // Slightly increase player speed after each level
         speedRef.current = speedRef.current + 0.005;
@@ -3583,12 +3739,26 @@ useEffect(() => {
   }, []);
 
   const skinColors = useMemo(
-    () =>
-      upgrades?.skin
-        ? { body: "#60a5fa", arm: "#4f46e5", head: "#ffd166", legs: "#0f172a" }
-        : { body: "#ff4d6d", arm: "#ff7aa2", head: "#ffd166", legs: "#111827" },
-    [upgrades?.skin]
+    () => {
+      const skin = SKINS.find(s => s.id === selectedSkin) || SKINS[0];
+      return skin.colors;
+    },
+    [selectedSkin]
   );
+
+  const onSelectSkin = useCallback((id) => {
+    setSelectedSkin(id);
+    localStorage.setItem("game_selected_skin", id);
+    setCollectionOpen(false);
+  }, []);
+
+  const onSelectLevel = useCallback((lv) => {
+    setLevel(lv);
+    levelRef.current = lv;
+    localStorage.setItem("game_level", String(lv));
+    setLevelsOpen(false);
+    startMissionForLevel(lv);
+  }, []);
 
   useEffect(() => {
     addScoreRef.current = addScore;
@@ -3679,6 +3849,8 @@ useEffect(() => {
             onStart={handleStart} 
             onOpenShop={onOpenShop} 
             onOpenMissions={() => setMissionsOpen(true)}
+            onOpenCollection={() => setCollectionOpen(true)}
+            onOpenLevels={() => setLevelsOpen(true)}
             onUIButtonClick={playClick} 
             onToggleTheme={() => setShowThemePanel(v => !v)} 
             level={level}
@@ -3842,6 +4014,24 @@ useEffect(() => {
         open={showMysteryBox}
         reward={mysteryBoxReward}
         onOpen={openMysteryBox}
+        onUIButtonClick={playClick}
+      />
+
+      <CollectionPanel 
+        open={collectionOpen} 
+        onClose={() => setCollectionOpen(false)}
+        unlockedSkins={unlockedSkins}
+        selectedSkin={selectedSkin}
+        onSelectSkin={onSelectSkin}
+        onUIButtonClick={playClick}
+      />
+
+      <LevelsPanel 
+        open={levelsOpen} 
+        onClose={() => setLevelsOpen(false)}
+        currentLevel={level}
+        unlockedLevels={unlockedLevels}
+        onSelectLevel={onSelectLevel}
         onUIButtonClick={playClick}
       />
 
