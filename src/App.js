@@ -231,16 +231,7 @@ const CameraFollow = memo(function CameraFollow({ playerRef, speedRef, crashFxRe
 // ---------------- THEMES ----------------
 const THEMES = [
   {
-    id: "city", name: "Cyber City",
-    bg: "linear-gradient(#0f172a, #334155)", fog: "#334155",
-    floor0: "#1e293b", floor1: "#0f172a",
-    wall0: "#334155", wall1: "#1e293b",
-    trimA0: "#38bdf8", trimA1: "#818cf8", trimA2: "#f472b6",
-    trimB0: "#22d3ee", trimB1: "#a78bfa",
-    preview: "#38bdf8"
-  },
-  {
-    id: "city", name: "Cyber City",
+    id: "city", name: "Urban Rush",
     bg: "linear-gradient(#0f172a, #334155)", fog: "#334155",
     floor0: "#1e293b", floor1: "#0f172a",
     wall0: "#334155", wall1: "#1e293b",
@@ -265,15 +256,6 @@ const THEMES = [
     trimA0: "#ef4444", trimA1: "#fb923c", trimA2: "#fcd34d",
     trimB0: "#f97316", trimB1: "#f59e0b",
     preview: "#fcd34d"
-  },
-  {
-    id: "snow", name: "Snowy Peak",
-    bg: "linear-gradient(#bae6fd, #e0f2fe)", fog: "#e0f2fe",
-    floor0: "#f8fafc", floor1: "#f1f5f9",
-    wall0: "#e2e8f0", wall1: "#cbd5e1",
-    trimA0: "#0ea5e9", trimA1: "#38bdf8", trimA2: "#7dd3fc",
-    trimB0: "#0284c7", trimB1: "#0369a1",
-    preview: "#0ea5e9"
   },
   {
     id: "night", name: "Midnight Ride",
@@ -378,9 +360,8 @@ const BackgroundAnimations = memo(function BackgroundAnimations({ theme, speedRe
         ))}
       </group>
 
-      {theme.id === 'snow' && <SnowParticles playerRef={playerRef} gameOver={gameOver} />}
-      {theme.id === 'jungle' && <JungleLeaves playerRef={playerRef} gameOver={gameOver} />}
-      <ParallaxScenery theme={theme} playerRef={playerRef} speedRef={speedRef} gameOver={gameOver} />
+{theme.id === 'jungle' && <JungleLeaves playerRef={playerRef} gameOver={gameOver} />}
+       <ParallaxScenery theme={theme} playerRef={playerRef} speedRef={speedRef} gameOver={gameOver} />
     </group>
   );
 });
@@ -2128,7 +2109,7 @@ function ModernHUD({
     prevCombo.current = combo;
   }
 
-  return (
+return (
     <>
       <div style={{ position: "absolute", top: 18, left: 18, zIndex: 1001, display: "flex", gap: 10 }}>
         <button
@@ -2152,8 +2133,27 @@ function ModernHUD({
         >
           🎨
         </button>
+      </div>
+          className="hud-pause hud-fade"
+          onClick={() => {
+            onUIButtonClick && onUIButtonClick();
+            onTogglePause && onTogglePause();
+          }}
+          aria-label={paused ? "Resume game" : "Pause game"}
+        >
+          {paused ? "▶" : "Ⅱ"}
+        </button>
 
-        <button
+<button
+           className="hud-pause hud-fade"
+           onClick={() => {
+             onUIButtonClick && onUIButtonClick();
+             onToggleTheme && onToggleTheme();
+           }}
+           title="Switch Theme"
+         >
+           🎨
+         </button>
           className="hud-pause hud-fade"
           onClick={() => {
             onUIButtonClick && onUIButtonClick();
@@ -2855,22 +2855,35 @@ export default function App() {
       // ignore
     }
 
-    try {
-      const bestScore = parseInt(localStorage.getItem("subway:best") || "0", 10);
-      if (!isNaN(bestScore)) setBest(bestScore);
-    } catch {}
+try {
+       const bestScore = parseInt(localStorage.getItem("subway:best") || "0", 10);
+       if (!isNaN(bestScore)) setBest(bestScore);
+     } catch {}
 
-    const loader = setTimeout(() => setLoading(false), 900);
-    return () => clearTimeout(loader);
-  }, []);
+     try {
+       const savedTheme = parseInt(localStorage.getItem("game_theme") || "0", 10);
+       if (!isNaN(savedTheme) && savedTheme >= 0 && savedTheme < THEMES.length) {
+         setThemeIndex(savedTheme);
+       }
+     } catch {}
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("game_upgrades", JSON.stringify(upgrades || {}));
-    } catch {
-      // ignore
-    }
-  }, [upgrades]);
+     const loader = setTimeout(() => setLoading(false), 900);
+     return () => clearTimeout(loader);
+   }, []);
+
+useEffect(() => {
+     try {
+       localStorage.setItem("game_upgrades", JSON.stringify(upgrades || {}));
+     } catch {
+       // ignore
+     }
+   }, [upgrades]);
+
+   useEffect(() => {
+     try {
+       localStorage.setItem("game_theme", String(themeIndex));
+     } catch {}
+   }, [themeIndex]);
 
   function addCoins(n = 1) {
     const delta = Math.max(0, Math.floor(Number(n) || 0));
