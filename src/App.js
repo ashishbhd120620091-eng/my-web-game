@@ -3835,36 +3835,27 @@ useEffect(() => {
     }
   }
 
-  // === BGM playback rate sync with speed (subtle, no distortion) ===
-  // Runs separately so it doesn't interfere with speed logic
   useEffect(() => {
-    if (!audio.bgmRef?.current) return;
-    let rafId = 0;
-    let running = true;
-    const loop = () => {
-      if (!running) return;
-      rafId = requestAnimationFrame(loop);
-      const bgm = audio.bgmRef?.current;
-      if (!bgm || bgm.paused) return;
-      // Map speed 0.28→1.85 to playbackRate 1.0→1.22 (very subtle — avoids pitch distortion)
-      const spd = Math.max(0.28, Math.min(1.85, speedRef.current || 0.28));
-      const t = (spd - 0.28) / (1.85 - 0.28);
-      // Ease-in-out curve so early game feels normal
-      const te = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-      const targetRate = 1.0 + te * 0.22;
-      // Smooth lerp to avoid sudden jumps
-      try {
-        bgm.playbackRate += (targetRate - bgm.playbackRate) * 0.04;
-      } catch {}
+    let raf = 0;
+    let last = performance.now();
+    const loop = (now) => {
+      raf = requestAnimationFrame(loop);
+      const delta = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (!started || gameOver || paused) return;
+      const targetMulti = Math.min(4.2, 1 + (speedRef.current - 0.28) * 0.9 + comboRef.current * 0.08);
+      multiplierRef.current += (targetMulti - multiplierRef.current) * Math.min(1, delta * 3.2);
+
+      // Score with event multiplier
+      scoreRef.current += delta * 14 * multiplierRef.current * (eventMultiplier?.score || 1);
+      setScore(Math.max(0, Math.floor(scoreRef.current || 0)));
+
+      // Distance tracking
+      setRunDistance(prev => prev + (speedRef.current * delta * 60 * 0.1)); // Scale for "meters"
     };
-    rafId = requestAnimationFrame(loop);
-    return () => {
-      running = false;
-      cancelAnimationFrame(rafId);
-      // Reset rate on cleanup
-      try { if (audio.bgmRef?.current) audio.bgmRef.current.playbackRate = 1.0; } catch {}
-    };
-  }, [audio.bgmRef]);
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [started, gameOver, paused, eventMultiplier]);
 
   return (
     // Wrap everything in FloatingTextsProvider so spawnText is available globally
