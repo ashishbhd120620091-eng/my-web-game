@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Text } from "@react-three/drei";
 import React, { useEffect, useRef, useState, useMemo, memo, useCallback, createContext, useContext } from "react";
 import { useMissionEventSystem, useMysteryBoxSystem } from "./MissionSystem";
 
@@ -9,7 +10,7 @@ const SKINS = [
   { id: "default", name: "Classic", colors: { body: "#ff4d6d", head: "#ffd166", legs: "#111827", arm: "#ff7aa2" } },
   { id: "neon", name: "Neon", colors: { body: "#00f5d4", head: "#ffd166", legs: "#111827", arm: "#00f5d4" } },
   { id: "sunset", name: "Sunset", colors: { body: "#f15bb5", head: "#fee440", legs: "#111827", arm: "#f15bb5" } },
-  { id: "shadow", name: "Shadow", colors: { body: "#333333", head: "#666666", legs: "#111111", arm: "#333333" } },
+  { id: "thala", name: "THALA Theme", colors: { body: "#1e3a8a", head: "#ffd166", legs: "#1e3a8a", arm: "#1e3a8a" } },
   { id: "hero", name: "Hero", colors: { body: "#3a86ff", head: "#ffd166", legs: "#111827", arm: "#3a86ff" } },
 ];
 
@@ -273,8 +274,137 @@ const THEMES = [
     trimA0: "#a855f7", trimA1: "#d946ef", trimA2: "#8b5cf6",
     trimB0: "#7c3aed", trimB1: "#6366f1",
     preview: "#a855f7"
+  },
+  {
+    id: "desi", name: "Desi India",
+    bg: "linear-gradient(#ff9933, #ffffff, #138808)",
+    fog: "#ff9933",
+    floor0: "#f59e0b", floor1: "#d97706",
+    wall0: "#fbbf24", wall1: "#f59e0b",
+    trimA0: "#ff9933", trimA1: "#ffffff", trimA2: "#138808",
+    trimB0: "#000080", trimB1: "#1e3a8a",
+    preview: "#ff9933"
   }
 ];
+
+const DESI_CITIES = ["Prayagraj", "Patna", "Uttarakhand", "Indore", "Mumbai", "Delhi", "Jaipur", "Varanasi", "Lucknow", "Kolkata", "Kanpur"];
+const DESI_MEMES = ["Horn OK Please", "Jaldi Waha Se Hato", "Full Desi Vibes", "Bhai Speed Kam", "Welcome To Patna", "UP Wale Mode", "Chai Break Ahead", "Yaha Sab Jugaad Hai", "Swag Se Swipe", "Aage Traffic Hai"];
+
+const DesiEnvironment = memo(function DesiEnvironment({ theme, playerRef, gameOver }) {
+  const signRef = useRef();
+  const decoRef = useRef();
+  
+  useEffect(() => {
+    console.log("Desi environment loaded");
+  }, []);
+
+  const signs = useRef(Array.from({ length: 6 }, (_, i) => ({
+    x: i % 2 === 0 ? -8.5 : 8.5,
+    y: 5.5,
+    z: -i * 50,
+    text: i % 2 === 0 ? DESI_CITIES[i % DESI_CITIES.length] : DESI_MEMES[i % DESI_MEMES.length],
+    color: i % 2 === 0 ? "#1e3a8a" : "#d97706"
+  })));
+
+  const decorations = useRef(Array.from({ length: 12 }, (_, i) => ({
+    x: i % 2 === 0 ? -7 : 7,
+    y: 0,
+    z: -i * 25,
+    type: Math.random() > 0.5 ? 'flag' : 'stall'
+  })));
+
+  useFrame((state, delta) => {
+    if (gameOver || !playerRef.current) return;
+    const pz = playerRef.current.z;
+
+    signs.current.forEach((s, i) => {
+      if (s.z > pz + 20) {
+        s.z = pz - 280;
+        const text = i % 2 === 0 
+          ? DESI_CITIES[Math.floor(Math.random() * DESI_CITIES.length)] 
+          : DESI_MEMES[Math.floor(Math.random() * DESI_MEMES.length)];
+        s.text = text;
+        console.log("Desi signboard spawned:", text);
+      }
+      const child = signRef.current?.children[i];
+      if (child) child.position.set(s.x, s.y, s.z);
+    });
+
+    decorations.current.forEach((d, i) => {
+      if (d.z > pz + 20) {
+        d.z = pz - 300;
+      }
+      const child = decoRef.current?.children[i];
+      if (child) child.position.set(d.x, 0, d.z);
+    });
+  });
+
+  return (
+    <group>
+      <group ref={signRef}>
+        {signs.current.map((s, i) => (
+          <group key={i}>
+            <mesh castShadow>
+              <boxGeometry args={[5, 2, 0.2]} />
+              <meshStandardMaterial color={s.color} />
+            </mesh>
+            <Text
+              position={[0, 0, 0.12]}
+              fontSize={0.5}
+              color="white"
+              anchorX="center"
+              anchorY="middle"
+            >
+              {s.text}
+            </Text>
+            <mesh position={[0, -2.5, 0]}>
+              <cylinderGeometry args={[0.15, 0.15, 5]} />
+              <meshStandardMaterial color="#334155" />
+            </mesh>
+          </group>
+        ))}
+      </group>
+      <group ref={decoRef}>
+        {decorations.current.map((d, i) => (
+          <group key={i}>
+            {d.type === 'flag' ? (
+              <group>
+                 <mesh position={[0, 3, 0]}>
+                    <cylinderGeometry args={[0.05, 0.05, 6]} />
+                    <meshStandardMaterial color="#475569" />
+                 </mesh>
+                 <mesh position={[0.6, 5.5, 0]} rotation={[0, 0, Math.PI / 2]}>
+                    <planeGeometry args={[1.2, 1.4]} />
+                    <meshStandardMaterial color={i % 3 === 0 ? "#ff9933" : i % 3 === 1 ? "#ffffff" : "#138808"} side={THREE.DoubleSide} />
+                 </mesh>
+              </group>
+            ) : (
+              <group position={[0, 0.5, 0]}>
+                <mesh castShadow position={[0, 0.5, 0]}>
+                  <boxGeometry args={[2.5, 1.2, 2.5]} />
+                  <meshStandardMaterial color="#92400e" />
+                </mesh>
+                <mesh position={[0, 1.2, 0]}>
+                   <boxGeometry args={[2.8, 0.15, 2.8]} />
+                   <meshStandardMaterial color="#b91c1c" />
+                </mesh>
+                <Text
+                  position={[0, 0.6, 1.26]}
+                  fontSize={0.35}
+                  color="white"
+                  anchorX="center"
+                  anchorY="middle"
+                >
+                  {i % 2 === 0 ? "CHAI STOP" : "SNACKS"}
+                </Text>
+              </group>
+            )}
+          </group>
+        ))}
+      </group>
+    </group>
+  );
+});
 
 // ---------------- BACKGROUND ANIMATIONS (Subway style) ----------------
 const BackgroundAnimations = memo(function BackgroundAnimations({ theme, speedRef, playerRef, gameOver }) {
@@ -368,6 +498,7 @@ const BackgroundAnimations = memo(function BackgroundAnimations({ theme, speedRe
         ))}
       </group>
 
+{theme.id === 'desi' && <DesiEnvironment theme={theme} playerRef={playerRef} gameOver={gameOver} />}
 {theme.id === 'jungle' && <JungleLeaves playerRef={playerRef} gameOver={gameOver} />}
        <ParallaxScenery theme={theme} playerRef={playerRef} speedRef={speedRef} gameOver={gameOver} />
     </group>
@@ -606,14 +737,14 @@ function useGameAudio() {
     };
 
     // support both expected and current actual filenames in /public
-    coinRef.current = createAudio(["/coin.mp3.mp3", "/sounds/coin.mp3", "/coin.mp3"], 0.95, false);
-    powerupRef.current = createAudio(["/coin.mp3.mp3", "/sounds/coin.mp3", "/coin.mp3"], 1.0, false);
-    jumpRef.current = createAudio(["/jump.mp3.mp3", "/sounds/jump.mp3", "/jump.mp3"], 0.9, false);
-    slideRef.current = createAudio(["/slide.mp3.mp3", "/sounds/slide.mp3", "/slide.mp3"], 0.9, false);
-    fallRef.current = createAudio(["/crash.mp3.mp3", "/sounds/crash.mp3", "/crash.mp3", "/fall.mp3"], 1, false);
-    shieldRef.current = createAudio(["/sounds/shield.mp3", "/shield.mp3"], 0.9, false);
-    clickRef.current = createAudio(["/sounds/click.mp3", "/click.mp3"], 0.85, false);
-    bgmRef.current = createAudio(["/bg.mp3.mp3", "/sounds/bgm.mp3", "/sounds/bg.mp3", "/bgm.mp3", "/bg.mp3"], 0.28, true);
+    coinRef.current = createAudio(["/coin.mp3.mp3", "/sounds/coin.mp3", "/coin.mp3"], 0.7, false);
+    powerupRef.current = createAudio(["/coin.mp3.mp3", "/sounds/coin.mp3", "/coin.mp3"], 0.75, false);
+    jumpRef.current = createAudio(["/jump.mp3.mp3", "/sounds/jump.mp3", "/jump.mp3"], 0.65, false);
+    slideRef.current = createAudio(["/slide.mp3.mp3", "/sounds/slide.mp3", "/slide.mp3"], 0.65, false);
+    fallRef.current = createAudio(["/crash.mp3.mp3", "/sounds/crash.mp3", "/crash.mp3", "/fall.mp3"], 0.8, false);
+    shieldRef.current = createAudio(["/sounds/shield.mp3", "/shield.mp3"], 0.65, false);
+    clickRef.current = createAudio(["/sounds/click.mp3", "/click.mp3"], 0.6, false);
+    bgmRef.current = createAudio(["/bg.mp3.mp3", "/sounds/bgm.mp3", "/sounds/bg.mp3", "/bgm.mp3", "/bg.mp3"], 0.18, true);
 
     // pre-configure audio elements once
     const refs = [coinRef, powerupRef, jumpRef, slideRef, fallRef, shieldRef, clickRef, bgmRef];
@@ -652,7 +783,7 @@ function useGameAudio() {
       if (bgmRef.current) {
         try {
           bgmRef.current.loop = true;
-          bgmRef.current.volume = 0.28;
+          bgmRef.current.volume = 0.18;
         } catch {}
       }
 
@@ -926,6 +1057,7 @@ const Obstacles = memo(function Obstacles({
   gameOver,
   setGameOver,
   playFallRef,
+  stopBgm,
   shield,
   setShield,
   slideRef,
@@ -976,6 +1108,7 @@ const Obstacles = memo(function Obstacles({
     if (playFallRef.current) {
       try { playFallRef.current(); } catch (e) {}
     }
+    stopBgm && stopBgm();
     onCrash && onCrash();
     setGameOver(true);
   }
@@ -3401,6 +3534,11 @@ useEffect(() => {
         const elapsed = Math.floor((Date.now() - levelStartTimeRef.current) / 1000);
         progressText = `${Math.min(elapsed, m.target)}/${m.target}s`;
         percent = (Math.min(elapsed, m.target) / m.target) * 100;
+        
+        // Auto-complete time mission
+        if (elapsed >= m.target && !missionCompletedRef.current) {
+          finalizeMissionCompletion(m);
+        }
       } else if (m.type === "jumps") {
         progressText = `${m.progress}/${m.target}`;
         percent = (m.progress / m.target) * 100;
@@ -3411,9 +3549,9 @@ useEffect(() => {
         progressText = `${m.progress}/${m.target}`;
         percent = (m.progress / m.target) * 100;
       } else if (m.type === "mix") {
+        const elapsed = Math.floor((Date.now() - levelStartTimeRef.current) / 1000);
         const p = m.parts.map((pt) => {
           if (pt.type === "time") {
-            const elapsed = Math.floor((Date.now() - levelStartTimeRef.current) / 1000);
             return `${Math.min(elapsed, pt.target)}/${pt.target}s`;
           }
           return `${pt.progress}/${pt.target}`;
@@ -3422,11 +3560,16 @@ useEffect(() => {
         // Average percent for mix
         const avg = m.parts.reduce((acc, pt) => {
            if (pt.type === "time") {
-             return acc + (Math.min(Math.floor((Date.now() - levelStartTimeRef.current) / 1000), pt.target) / pt.target);
+             return acc + (Math.min(elapsed, pt.target) / pt.target);
            }
            return acc + (pt.progress / pt.target);
         }, 0) / m.parts.length;
         percent = avg * 100;
+
+        // Auto-complete mix mission
+        if (!missionCompletedRef.current && m.parts.every(pt => (pt.type === "time" ? elapsed >= pt.target : pt.progress >= pt.target))) {
+          finalizeMissionCompletion(m);
+        }
       }
       setMissionUI({ short: m.short || m.desc, desc: m.desc, progress: progressText, percent });
     }, 200);
@@ -3832,6 +3975,24 @@ useEffect(() => {
         setNearMissFlash(v => v + 1);
         setRunNearMisses(prev => prev + 1);
       } catch {}
+
+      const m = missionRef.current;
+      if (m) {
+        if (m.type === "near_misses") {
+          m.progress = (m.progress || 0) + 1;
+          if (m.progress >= m.target && !missionCompletedRef.current) {
+            finalizeMissionCompletion(m);
+          }
+        } else if (m.type === "mix") {
+          const part = m.parts.find((p) => p.type === "near_misses");
+          if (part) {
+            part.progress = (part.progress || 0) + 1;
+            if (m.parts.every((pt) => (pt.type === "time" ? Math.floor((Date.now() - levelStartTimeRef.current) / 1000) >= pt.target : (pt.progress || 0) >= pt.target))) {
+              finalizeMissionCompletion(m);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -3962,6 +4123,7 @@ useEffect(() => {
                 setGameOver(v);
               }}
               playFallRef={playFallRef}
+              stopBgm={stopBgm}
               shield={shield}
               setShield={setShield}
               slideRef={slideRef}
