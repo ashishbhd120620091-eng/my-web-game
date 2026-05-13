@@ -3,8 +3,28 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import React, { useEffect, useRef, useState, useMemo, memo, useCallback, createContext, useContext } from "react";
 import { useMissionEventSystem, useMysteryBoxSystem } from "./MissionSystem";
+import { CustomizePanel } from "./CustomizePanel";
+import { ITEMS, OutfitManager } from "./OutfitSystem";
+
 
 const LANES = [-2, 0, 2];
+
+const OUTFIT_ITEMS = [
+  { id: "h1", cat: "hair", name: "Spiky Red", cost: 150, color: "#ef4444" },
+  { id: "h2", cat: "hair", name: "Tech Blue", cost: 200, color: "#3b82f6" },
+  { id: "h3", cat: "hair", name: "Ninja Bun", cost: 250, color: "#111827" },
+  { id: "c1", cat: "cap", name: "Street Snap", cost: 150, color: "#1f2937" },
+  { id: "c2", cat: "cap", name: "Festival Hat", cost: 200, color: "#f59e0b" },
+  { id: "m1", cat: "mask", name: "Cyber Tech", cost: 300, color: "#10b981" },
+  { id: "m2", cat: "mask", name: "Ninja Wrap", cost: 250, color: "#000" },
+  { id: "s1", cat: "shirt", name: "Sporty Jersey", cost: 200, color: "#3b82f6" },
+  { id: "s2", cat: "shirt", name: "Tech Hoodie", cost: 350, color: "#475569" },
+  { id: "s3", cat: "shirt", name: "Festival Tee", cost: 180, color: "#ec4899" },
+  { id: "p1", cat: "pant", name: "Cargo Tech", cost: 250, color: "#1e293b" },
+  { id: "p2", cat: "pant", name: "Sporty Shorts", cost: 150, color: "#475569" },
+  { id: "sh1", cat: "shoes", name: "Neon Runners", cost: 300, color: "#06b6d4" },
+  { id: "sh2", cat: "shoes", name: "Classic Vans", cost: 200, color: "#f97316" }
+];
 
 const SKINS = [
   { id: "default", name: "Classic", colors: { body: "#ff4d6d", head: "#ffd166", legs: "#111827", arm: "#ff7aa2" } },
@@ -13,6 +33,90 @@ const SKINS = [
   { id: "thala", name: "THALA Theme", colors: { body: "#1e3a8a", head: "#ffd166", legs: "#1e3a8a", arm: "#1e3a8a" } },
   { id: "hero", name: "Hero", colors: { body: "#3a86ff", head: "#ffd166", legs: "#111827", arm: "#3a86ff" } },
 ];
+
+// ---------------- CHARACTER ----------------
+// ---------------- OUTFIT RENDERER ----------------
+const OutfitRenderer = memo(function OutfitRenderer({ equipped }) {
+  const items = useMemo(() => {
+    if (!equipped) return [];
+    return Object.entries(equipped).map(([cat, id]) => {
+      return ITEMS.find(i => i.id === id);
+    }).filter(Boolean);
+  }, [equipped]);
+
+  return (
+    <group>
+      {items.map(item => {
+        switch (item.category) {
+          case 'Hair':
+            return (
+              <mesh key={item.id} position={[0, 1.82, 0.05]}>
+                <boxGeometry args={[0.35, 0.25, 0.35]} />
+                <meshStandardMaterial color={item.color} />
+              </mesh>
+            );
+          case 'Cap':
+            return (
+              <mesh key={item.id} position={[0, 1.9, 0]}>
+                <boxGeometry args={[0.45, 0.15, 0.45]} />
+                <meshStandardMaterial color={item.color} />
+              </mesh>
+            );
+          case 'Mask':
+            return (
+              <group key={item.id} position={[0, 1.62, 0.18]}>
+                {/* Main Mask Body */}
+                <mesh>
+                  <boxGeometry args={[0.3, 0.2, 0.12]} />
+                  <meshStandardMaterial color={item.color} metalness={0.5} roughness={0.2} />
+                </mesh>
+                {/* Subtle detail to make it look like a mask */}
+                <mesh position={[0, 0, 0.07]}>
+                  <boxGeometry args={[0.2, 0.05, 0.02]} />
+                  <meshStandardMaterial color="#000" opacity={0.3} transparent />
+                </mesh>
+              </group>
+            );
+          case 'Shirt':
+            return (
+              <mesh key={item.id} position={[0, 0.8, 0]}>
+                <boxGeometry args={[0.52, 1.02, 0.37]} />
+                <meshStandardMaterial color={item.color} transparent opacity={0.9} />
+              </mesh>
+            );
+          case 'Pant':
+            return (
+              <group key={item.id}>
+                <mesh position={[-0.15, 0.2, 0]}>
+                  <boxGeometry args={[0.22, 0.62, 0.22]} />
+                  <meshStandardMaterial color={item.color} />
+                </mesh>
+                <mesh position={[0.15, 0.2, 0]}>
+                  <boxGeometry args={[0.22, 0.62, 0.22]} />
+                  <meshStandardMaterial color={item.color} />
+                </mesh>
+              </group>
+            );
+          case 'Shoes':
+            return (
+              <group key={item.id}>
+                <mesh position={[-0.15, -0.05, 0]}>
+                  <boxGeometry args={[0.25, 0.15, 0.3]} />
+                  <meshStandardMaterial color={item.color} />
+                </mesh>
+                <mesh position={[0.15, -0.05, 0]}>
+                  <boxGeometry args={[0.25, 0.15, 0.3]} />
+                  <meshStandardMaterial color={item.color} />
+                </mesh>
+              </group>
+            );
+          default:
+            return null;
+        }
+      })}
+    </group>
+  );
+});
 
 // ---------------- CHARACTER ----------------
 const Character = memo(function Character({
@@ -25,10 +129,15 @@ const Character = memo(function Character({
   gameOver,
   skinColors,
   hoverboardActive,
+  jetpackActive,
+  equippedOutfits,
 }) {
   const ref = useRef();
   const vel = useRef(0);
   const swing = useRef(0);
+  const jetpackFlameRef = useRef();
+
+  const SKY_LANE_Y = 6;
 
   // tuned physics (higher jump, smoother gravity/airtime)
   const GRAVITY = 28; // Increased for snappier fall
@@ -53,7 +162,7 @@ const Character = memo(function Character({
     ref.current.rotation.y = THREE.MathUtils.lerp(ref.current.rotation.y, currentVelocityX * 0.008, 0.15);
 
     // Subtle side-to-side sway when running on ground
-    if (ref.current.position.y <= 0.505) {
+    if (ref.current.position.y <= 0.505 && !jetpackActive) {
       ref.current.position.x += Math.sin(state.clock.elapsedTime * 8) * 0.01;
     }
 
@@ -62,36 +171,51 @@ const Character = memo(function Character({
 
     const nowS = performance.now() / 1000;
 
-    // jump
-    if (jumpRef?.current) {
-      if (ref.current.position.y <= 0.505) {
-        vel.current = JUMP_V;
-        if (jumpStartRef) jumpStartRef.current = nowS;
-      }
-      jumpRef.current = false;
-    }
-
-    // gravity integration
-    const gravityMul = vel.current > 0 ? 0.85 : 1.8; // Snappier peak and fall
-    vel.current -= GRAVITY * gravityMul * delta;
-    ref.current.position.y += vel.current * delta;
-
-    // force landing
-    if (jumpStartRef?.current && nowS - jumpStartRef.current > FORCE_FALL_S) {
-      if (vel.current > FORCE_FALL_V) {
-        vel.current = Math.min(vel.current, FORCE_FALL_V);
-      }
-    }
-
-    // ground clamp
-    if (ref.current.position.y < 0.5) {
-      ref.current.position.y = 0.5;
+    if (jetpackActive) {
+      // Smoothly move to sky lane
+      ref.current.position.y = THREE.MathUtils.lerp(ref.current.position.y, SKY_LANE_Y + Math.sin(state.clock.elapsedTime * 4) * 0.2, 0.1);
+      ref.current.rotation.x = THREE.MathUtils.lerp(ref.current.rotation.x, 0.3, 0.1); // Tilt forward
       vel.current = 0;
-      if (jumpStartRef) jumpStartRef.current = 0;
+
+      // Jetpack flame pulse
+      if (jetpackFlameRef.current) {
+        jetpackFlameRef.current.scale.y = 1 + Math.sin(state.clock.elapsedTime * 20) * 0.5;
+        jetpackFlameRef.current.material.opacity = 0.6 + Math.random() * 0.4;
+      }
+    } else {
+      // jump
+      if (jumpRef?.current) {
+        if (ref.current.position.y <= 0.505) {
+          vel.current = JUMP_V;
+          if (jumpStartRef) jumpStartRef.current = nowS;
+        }
+        jumpRef.current = false;
+      }
+
+      // gravity integration
+      const gravityMul = vel.current > 0 ? 0.85 : 1.8; // Snappier peak and fall
+      vel.current -= GRAVITY * gravityMul * delta;
+      ref.current.position.y += vel.current * delta;
+
+      // force landing
+      if (jumpStartRef?.current && nowS - jumpStartRef.current > FORCE_FALL_S) {
+        if (vel.current > FORCE_FALL_V) {
+          vel.current = Math.min(vel.current, FORCE_FALL_V);
+        }
+      }
+
+      // ground clamp
+      if (ref.current.position.y < 0.5) {
+        ref.current.position.y = 0.5;
+        vel.current = 0;
+        if (jumpStartRef) jumpStartRef.current = 0;
+      }
+
+      ref.current.rotation.x = THREE.MathUtils.lerp(ref.current.rotation.x, 0, 0.1);
     }
 
     // sliding visual
-    const sliding = slideRef?.current && (nowS - slideRef.current < 0.65);
+    const sliding = slideRef?.current && (nowS - slideRef.current < 0.65) && !jetpackActive;
     const targetScaleY = sliding ? 0.4 : 1;
     const slideLerp = 1 - Math.exp(-25 * delta); 
     ref.current.scale.y += (targetScaleY - ref.current.scale.y) * slideLerp;
@@ -106,14 +230,22 @@ const Character = memo(function Character({
     const leftArm = ref.current.children[4];
     const rightArm = ref.current.children[5];
 
-    if (leftLeg) leftLeg.rotation.x = Math.sin(swing.current) * 0.6;
-    if (rightLeg) rightLeg.rotation.x = -Math.sin(swing.current) * 0.6;
-    if (leftArm) leftArm.rotation.x = -Math.sin(swing.current) * 0.6;
-    if (rightArm) rightArm.rotation.x = Math.sin(swing.current) * 0.6;
+    if (jetpackActive) {
+      // Legs wave in air
+      if (leftLeg) leftLeg.rotation.x = Math.sin(state.clock.elapsedTime * 5) * 0.4;
+      if (rightLeg) rightLeg.rotation.x = Math.sin(state.clock.elapsedTime * 5 + Math.PI) * 0.4;
+      if (leftArm) leftArm.rotation.x = -0.3;
+      if (rightArm) rightArm.rotation.x = -0.3;
+    } else {
+      if (leftLeg) leftLeg.rotation.x = Math.sin(swing.current) * 0.6;
+      if (rightLeg) rightLeg.rotation.x = -Math.sin(swing.current) * 0.6;
+      if (leftArm) leftArm.rotation.x = -Math.sin(swing.current) * 0.6;
+      if (rightArm) rightArm.rotation.x = Math.sin(swing.current) * 0.6;
 
-    if (sliding) {
-      if (leftArm) leftArm.rotation.x = -0.9;
-      if (rightArm) rightArm.rotation.x = -0.9;
+      if (sliding) {
+        if (leftArm) leftArm.rotation.x = -0.9;
+        if (rightArm) rightArm.rotation.x = -0.9;
+      }
     }
 
     // publish position for camera/collisions (ref object)
@@ -136,6 +268,33 @@ const Character = memo(function Character({
       <mesh castShadow position={[0, 1.6, 0]}>
         <sphereGeometry args={[0.32]} />
         <meshStandardMaterial color={skinColors?.head || "#ffd166"} />
+        
+        {/* Face Features */}
+        <group position={[0, 0, 0.22]}>
+          {/* Eyes */}
+          <mesh position={[-0.12, 0.05, 0]}>
+            <sphereGeometry args={[0.04, 8, 8]} />
+            <meshBasicMaterial color="#111827" />
+          </mesh>
+          <mesh position={[0.12, 0.05, 0]}>
+            <sphereGeometry args={[0.04, 8, 8]} />
+            <meshBasicMaterial color="#111827" />
+          </mesh>
+          {/* Eyebrows */}
+          <mesh position={[-0.12, 0.12, 0]}>
+            <boxGeometry args={[0.08, 0.02, 0.01]} />
+            <meshBasicMaterial color="#111827" />
+          </mesh>
+          <mesh position={[0.12, 0.12, 0]}>
+            <boxGeometry args={[0.08, 0.02, 0.01]} />
+            <meshBasicMaterial color="#111827" />
+          </mesh>
+          {/* Mouth */}
+          <mesh position={[0, -0.1, 0]}>
+            <boxGeometry args={[0.12, 0.02, 0.01]} />
+            <meshBasicMaterial color="#111827" />
+          </mesh>
+        </group>
       </mesh>
 
       {/* left leg */}
@@ -162,6 +321,9 @@ const Character = memo(function Character({
         <meshStandardMaterial color={skinColors?.arm || "#ff7aa2"} />
       </mesh>
 
+      {/* OUTFIT OVERLAY */}
+      <OutfitRenderer equipped={equippedOutfits} />
+
       {/* hoverboard glow (simple, lightweight) */}
       <mesh visible={!!hoverboardActive} position={[0, 0.36, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[0.52, 0.52, 0.02, 24]} />
@@ -175,9 +337,26 @@ const Character = memo(function Character({
           metalness={0.6}
         />
       </mesh>
+
+      {/* Jetpack Visuals */}
+      <group visible={!!jetpackActive} position={[0, 0.8, -0.25]}>
+        <mesh castShadow>
+          <boxGeometry args={[0.6, 0.7, 0.3]} />
+          <meshStandardMaterial color="#475569" metalness={0.8} roughness={0.2} />
+        </mesh>
+        <mesh position={[-0.2, -0.4, 0]} ref={jetpackFlameRef}>
+          <cylinderGeometry args={[0.1, 0, 0.4, 8]} />
+          <meshBasicMaterial color="#f97316" transparent opacity={0.8} />
+        </mesh>
+        <mesh position={[0.2, -0.4, 0]}>
+          <cylinderGeometry args={[0.1, 0, 0.4, 8]} />
+          <meshBasicMaterial color="#f97316" transparent opacity={0.8} />
+        </mesh>
+      </group>
     </group>
   );
 });
+
 
 // ---------------- CAMERA ----------------
 const CameraFollow = memo(function CameraFollow({ playerRef, speedRef, crashFxRef }) {
@@ -298,55 +477,64 @@ const DesiEnvironment = memo(function DesiEnvironment({ theme, playerRef, gameOv
     console.log("Desi environment loaded");
   }, []);
 
-  const signs = useRef(Array.from({ length: 6 }, (_, i) => ({
+  const signs = useRef(Array.from({ length: 4 }, (_, i) => ({
     x: i % 2 === 0 ? -8.5 : 8.5,
     y: 5.5,
-    z: -i * 50,
-    text: i % 2 === 0 ? DESI_CITIES[i % DESI_CITIES.length] : DESI_MEMES[i % DESI_MEMES.length],
+    z: -i * 70,
+    text: i % 2 === 0 ? (DESI_CITIES[i % DESI_CITIES.length] || "India") : (DESI_MEMES[i % DESI_MEMES.length] || "Welcome"),
     color: i % 2 === 0 ? "#1e3a8a" : "#d97706"
   })));
 
-  const decorations = useRef(Array.from({ length: 12 }, (_, i) => ({
+  const decorations = useRef(Array.from({ length: 6 }, (_, i) => ({
     x: i % 2 === 0 ? -7 : 7,
     y: 0,
-    z: -i * 25,
+    z: -i * 50,
     type: Math.random() > 0.5 ? 'flag' : 'stall'
   })));
 
   useFrame((state, delta) => {
-    if (gameOver || !playerRef.current) return;
-    const pz = playerRef.current.z;
+    if (gameOver || !playerRef.current || !theme) return;
+    try {
+      const pz = playerRef.current.z;
 
-    signs.current.forEach((s, i) => {
-      if (s.z > pz + 20) {
-        s.z = pz - 280;
-        const text = i % 2 === 0 
-          ? DESI_CITIES[Math.floor(Math.random() * DESI_CITIES.length)] 
-          : DESI_MEMES[Math.floor(Math.random() * DESI_MEMES.length)];
-        s.text = text;
-        console.log("Desi signboard spawned:", text);
+      if (signs.current) {
+        signs.current.forEach((s, i) => {
+          if (s.z > pz + 20) {
+            s.z = pz - 280;
+            const text = i % 2 === 0 
+              ? (DESI_CITIES[Math.floor(Math.random() * DESI_CITIES.length)] || "India")
+              : (DESI_MEMES[Math.floor(Math.random() * DESI_MEMES.length)] || "Welcome");
+            s.text = text;
+          }
+          const child = signRef.current?.children[i];
+          if (child) child.position.set(s.x, s.y, s.z);
+        });
       }
-      const child = signRef.current?.children[i];
-      if (child) child.position.set(s.x, s.y, s.z);
-    });
 
-    decorations.current.forEach((d, i) => {
-      if (d.z > pz + 20) {
-        d.z = pz - 300;
+      if (decorations.current) {
+        decorations.current.forEach((d, i) => {
+          if (d.z > pz + 20) {
+            d.z = pz - 300;
+          }
+          const child = decoRef.current?.children[i];
+          if (child) child.position.set(d.x, 0, d.z);
+        });
       }
-      const child = decoRef.current?.children[i];
-      if (child) child.position.set(d.x, 0, d.z);
-    });
+    } catch (e) {
+      console.error("DesiEnvironment frame error:", e);
+    }
   });
+
+  if (!theme) return null;
 
   return (
     <group>
       <group ref={signRef}>
-        {signs.current.map((s, i) => (
-          <group key={i}>
+        {(signs.current || []).map((s, i) => (
+          <group key={i} position={[s.x, s.y, s.z]}>
             <mesh castShadow>
               <boxGeometry args={[5, 2, 0.2]} />
-              <meshStandardMaterial color={s.color} />
+              <meshStandardMaterial color={s.color || "#1e3a8a"} />
             </mesh>
             <Text
               position={[0, 0, 0.12]}
@@ -355,7 +543,7 @@ const DesiEnvironment = memo(function DesiEnvironment({ theme, playerRef, gameOv
               anchorX="center"
               anchorY="middle"
             >
-              {s.text}
+              {s.text || ""}
             </Text>
             <mesh position={[0, -2.5, 0]}>
               <cylinderGeometry args={[0.15, 0.15, 5]} />
@@ -365,8 +553,8 @@ const DesiEnvironment = memo(function DesiEnvironment({ theme, playerRef, gameOv
         ))}
       </group>
       <group ref={decoRef}>
-        {decorations.current.map((d, i) => (
-          <group key={i}>
+        {(decorations.current || []).map((d, i) => (
+          <group key={i} position={[d.x, 0, d.z]}>
             {d.type === 'flag' ? (
               <group>
                  <mesh position={[0, 3, 0]}>
@@ -913,9 +1101,9 @@ const COIN_PATTERNS = {
   LANE_SHIFT: 3,
 };
 
-const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoinRef, magnet, speedRef, doubleActive, obstaclesRef, gameOver, spawnCoinsForObstacleRef }) {
+const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoinRef, magnet, speedRef, doubleActive, obstaclesRef, gameOver, spawnCoinsForObstacleRef, jetpackActive }) {
   const coins = useRef(
-    Array.from({ length: 48 }, () => ({
+    Array.from({ length: 64 }, () => ({
       x: 0,
       z: -9999,
       y: 0.82,
@@ -926,8 +1114,65 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
 
   const groupRefs = useRef([]);
   const coinScaleRefs = useRef(coins.current.map(() => ({ s: 1, t: 0 })));
+  const lastSkySpawnRef = useRef(0);
+  const SKY_LANE_Y = 6;
+
+  // Shared geometry/material for performance
+  const coinGeo = useMemo(() => new THREE.TorusGeometry(0.28, 0.08, 12, 20), []);
+  const coinMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: "#f6c85f", 
+    metalness: 0.85, 
+    roughness: 0.25, 
+    emissive: "#fff2bf", 
+    emissiveIntensity: 0.2 
+  }), []);
+
+  useEffect(() => {
+    console.log("Performance optimization active: Coins pooling initialized");
+  }, []);
+
+  const spawnSkyCoins = useCallback((pz) => {
+    const patternType = Math.floor(Math.random() * 3);
+    const lane = Math.floor(Math.random() * 3);
+    const count = 8;
+    const spacing = 4;
+    let placed = 0;
+
+    for (let i = 0; i < coins.current.length && placed < count; i++) {
+      const c = coins.current[i];
+      if (c.inCluster) continue;
+      c.inCluster = true;
+      c.z = pz - 40 - (placed * spacing);
+      if (patternType === 0) { // Straight
+        c.x = LANES[lane];
+        c.y = SKY_LANE_Y;
+      } else if (patternType === 1) { // Curve
+        c.x = LANES[lane] + Math.sin(placed * 0.8) * 1.5;
+        c.y = SKY_LANE_Y + Math.cos(placed * 0.8) * 1.0;
+      } else { // Lane Shift
+        const targetLane = (lane + 1) % 3;
+        c.x = THREE.MathUtils.lerp(LANES[lane], LANES[targetLane], placed / (count - 1));
+        c.y = SKY_LANE_Y;
+      }
+      placed++;
+    }
+  }, []);
+
+  useFrame((state, delta) => {
+    if (!playerRef.current || gameOver) return;
+    const speed = speedRef.current ?? 0.28;
+    const pz = playerRef.current.z;
+
+    // Force implement sky coin spawning during jetpack
+    if (jetpackActive && pz < lastSkySpawnRef.current - 25) {
+      spawnSkyCoins(pz);
+      lastSkySpawnRef.current = pz;
+      console.log("Jetpack active: spawning sky coins");
+    }
+  });
 
   const spawnCoinsForObstacle = useCallback((anchorObs) => {
+    if (jetpackActive) return;
     const obsType = anchorObs.type;
     let pattern = [];
 
@@ -1043,10 +1288,7 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
       ref={(el) => (groupRefs.current[i] = el)}
       position={[c.x, c.y, c.z]}
     >
-      <mesh>
-        <torusGeometry args={[0.28, 0.08, 12, 20]} />
-        <meshStandardMaterial color="#f6c85f" metalness={0.85} roughness={0.25} emissive="#fff2bf" emissiveIntensity={doubleActive ? 0.6 : 0.2} />
-      </mesh>
+      <mesh geometry={coinGeo} material={coinMat} />
     </group>
   ));
 });
@@ -1074,6 +1316,7 @@ const Obstacles = memo(function Obstacles({
   obstaclesRef, // Shared ref
   spawnCoinsForObstacleRef,
   spawnDelay = 0, // NEW: Delay in ms
+  jetpackActive,
 }) {
   // Types: jump (barrier), slide (tunnel), lane (train/wall)
   const obs = obstaclesRef;
@@ -1115,7 +1358,7 @@ const Obstacles = memo(function Obstacles({
 
   function generatePattern() {
     const steps = [];
-    const types = ["jump", "slide", "lane", "lane"];
+    const types = ["jump", "slide", "slime", "boost"]; // REMOVED BROKEN BLACK OBSTACLE (lane)
     const length = 60;
 
     for (let i = 0; i < length; i++) {
@@ -1214,10 +1457,20 @@ const Obstacles = memo(function Obstacles({
               if (m.progress >= m.target) finalizeMissionCompletion(m);
             }
           }
+        } else if (o.type === "slime") {
+          speedRef.current = Math.max(0.15, speedRef.current * 0.7);
+          respawn(o);
+        } else if (o.type === "boost") {
+          speedRef.current = Math.min(1.8, speedRef.current * 1.3);
+          respawn(o);
         } else {
-          handleHit();
+          // If any unknown or remaining obstacle (like lane), check jetpack
+          if (!jetpackActive) {
+            handleHit();
+            console.log("Obstacle collision fixed: handled via general hit logic");
+          }
         }
-      } else if (!isDelayed) {
+      } else if (!isDelayed && !jetpackActive) {
         const now = performance.now() / 1000;
         if (!nearMissedRef.current[i] && now - lastNearMissAtRef.current > NEAR_MISS_COOLDOWN) {
           if (dz < NEAR_MISS_DZ && dx < NEAR_MISS_DX) {
@@ -1290,18 +1543,52 @@ const Obstacles = memo(function Obstacles({
     requestAnimationFrame(step);
   }
 
+  // Reuse geometries for obstacles
+  const jumpGeo = useMemo(() => new THREE.BoxGeometry(1.8, 0.9, 0.5), []);
+  const jumpTopGeo = useMemo(() => new THREE.BoxGeometry(1.9, 0.15, 0.55), []);
+  const slideGeo = useMemo(() => new THREE.BoxGeometry(1.9, 0.6, 1.2), []);
+  const slideLegGeo = useMemo(() => new THREE.BoxGeometry(0.2, 2.4, 0.2), []);
+
   return obs.current.map((o, i) => {
     if (o.type === "lane") {
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
-          <mesh castShadow position={[0, 0.4, 0]}>
-            <boxGeometry args={[1.8, 1.8, 4.0]} />
-            <meshStandardMaterial color="#ef4444" />
+          {/* Main Train Body */}
+          <mesh castShadow position={[0, 0.5, 0]}>
+            <boxGeometry args={[1.7, 1.8, 8.0]} />
+            <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.2} />
           </mesh>
-          <mesh position={[0, 0.6, -2.0]}>
-            <boxGeometry args={[1.6, 0.8, 0.1]} />
-            <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.6} />
+          {/* Front Cab */}
+          <mesh position={[0, 0.6, -4.01]}>
+            <boxGeometry args={[1.5, 1.0, 0.1]} />
+            <meshStandardMaterial color="#1e293b" />
           </mesh>
+          {/* Front Window */}
+          <mesh position={[0, 0.8, -4.07]}>
+            <boxGeometry args={[1.2, 0.5, 0.05]} />
+            <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.8} transparent opacity={0.6} />
+          </mesh>
+          {/* Headlights */}
+          <mesh position={[-0.4, 0.1, -4.01]}>
+            <sphereGeometry args={[0.15, 16, 16]} />
+            <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={1.2} />
+          </mesh>
+          <mesh position={[0.4, 0.1, -4.01]}>
+            <sphereGeometry args={[0.15, 16, 16]} />
+            <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={1.2} />
+          </mesh>
+          {/* Top Detail */}
+          <mesh position={[0, 1.45, 0]}>
+            <boxGeometry args={[1.3, 0.15, 7.0]} />
+            <meshStandardMaterial color="#1e293b" />
+          </mesh>
+          {/* Side Panels */}
+          {[-2.5, 0, 2.5].map((z, j) => (
+            <mesh key={j} position={[0.86, 0.7, z]}>
+              <boxGeometry args={[0.02, 0.7, 1.5]} />
+              <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.3} transparent opacity={0.4} />
+            </mesh>
+          ))}
         </group>
       );
     }
@@ -1309,12 +1596,10 @@ const Obstacles = memo(function Obstacles({
     if (o.type === "jump") {
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
-          <mesh castShadow>
-            <boxGeometry args={[1.8, 0.9, 0.5]} />
+          <mesh castShadow geometry={jumpGeo}>
             <meshStandardMaterial color="#f59e0b" />
           </mesh>
-          <mesh position={[0, 0.45, 0]}>
-            <boxGeometry args={[1.9, 0.15, 0.55]} />
+          <mesh position={[0, 0.45, 0]} geometry={jumpTopGeo}>
             <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.5} />
           </mesh>
         </group>
@@ -1324,17 +1609,44 @@ const Obstacles = memo(function Obstacles({
     if (o.type === "slide") {
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
-          <mesh castShadow position={[0, 0.6, 0]}>
-            <boxGeometry args={[1.9, 0.6, 1.2]} />
+          <mesh castShadow position={[0, 0.6, 0]} geometry={slideGeo}>
             <meshStandardMaterial color="#7c3aed" emissive="#7c3aed" emissiveIntensity={0.3} />
           </mesh>
-          <mesh position={[-0.85, -0.8, 0]}>
-            <boxGeometry args={[0.2, 2.4, 0.2]} />
+          <mesh position={[-0.85, -0.8, 0]} geometry={slideLegGeo}>
             <meshStandardMaterial color="#5b21b6" />
           </mesh>
-          <mesh position={[0.85, -0.8, 0]}>
-            <boxGeometry args={[0.2, 2.4, 0.2]} />
+          <mesh position={[0.85, -0.8, 0]} geometry={slideLegGeo}>
             <meshStandardMaterial color="#5b21b6" />
+          </mesh>
+        </group>
+      );
+    }
+
+    if (o.type === "slime") {
+      return (
+        <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.48, 0]}>
+            <planeGeometry args={[2.2, 3.5]} />
+            <meshStandardMaterial color="#4ade80" transparent opacity={0.6} metalness={0} roughness={1} />
+          </mesh>
+          <mesh position={[0, -0.45, 0]}>
+            <boxGeometry args={[1.8, 0.05, 3]} />
+            <meshStandardMaterial color="#22c55e" transparent opacity={0.4} />
+          </mesh>
+        </group>
+      );
+    }
+
+    if (o.type === "boost") {
+      return (
+        <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.48, 0]}>
+            <planeGeometry args={[1.8, 2.5]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.8} />
+          </mesh>
+          <mesh position={[0, -0.4, 0.5]} rotation={[-Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0, 0.4, 0.8, 3]} />
+            <meshStandardMaterial color="white" emissive="white" emissiveIntensity={1} />
           </mesh>
         </group>
       );
@@ -1418,7 +1730,7 @@ const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activate
 const POWERUP_SPAWN_INTERVAL = 4500;
 const POWERUP_SAFE_CLEARANCE = 30;
 
-const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, activateMysteryRef, playPowerupRef, gameOver, obstaclesRef, speedRef }) {
+const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, activateMysteryRef, activateJetpackRef, playPowerupRef, gameOver, obstaclesRef, speedRef }) {
   const ups = useRef(
     Array.from({ length: 2 }, (_, i) => ({
       type: i === 0 ? "double" : "hover",
@@ -1458,18 +1770,20 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
     ups.current.forEach((u, idx) => {
       u.bob = Math.sin((state.clock.elapsedTime + idx * 0.7) * 2.2) * 0.12;
       const dx = Math.abs(u.x - playerRef.current.x);
+      const dy = Math.abs(u.y - playerRef.current.y - 0.5);
       const dz = Math.abs(u.z - pz);
 
-      if (dx < 0.9 && dz < 0.9) {
+      if (dx < 0.9 && dz < 0.9 && dy < 0.9) {
         playPowerupRef?.current && playPowerupRef.current();
         if (u.type === "double") activateDoubleRef?.current && activateDoubleRef.current();
         else if (u.type === "hover") activateHoverRef?.current && activateHoverRef.current();
         else if (u.type === "mystery") activateMysteryRef?.current && activateMysteryRef.current();
+        else if (u.type === "jetpack") activateJetpackRef?.current && activateJetpackRef.current();
 
         u.z = pz - (7000 + Math.random() * 10000);
         u.x = LANES[Math.floor(Math.random() * 3)];
         const rand = Math.random();
-        u.type = rand < 0.1 ? "mystery" : rand < 0.6 ? "double" : "hover";
+        u.type = rand < 0.1 ? "mystery" : rand < 0.2 ? "jetpack" : rand < 0.6 ? "double" : "hover";
         u.pattern = Math.floor(Math.random() * 4);
         lastSpawnRef.current = now;
       }
@@ -1506,7 +1820,7 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
           u.x = LANES[Math.floor(Math.random() * 3)];
         }
         const rand = Math.random();
-        u.type = rand < 0.1 ? "mystery" : rand < 0.6 ? "double" : "hover";
+        u.type = rand < 0.1 ? "mystery" : rand < 0.2 ? "jetpack" : rand < 0.6 ? "double" : "hover";
         u.pattern = Math.floor(Math.random() * 4);
       }
 
@@ -1555,6 +1869,20 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
           <mesh position={[0, 0, 0]}>
             <boxGeometry args={[0.4, 0.05, 0.4]} />
             <meshStandardMaterial color="#fff" />
+          </mesh>
+        </group>
+      );
+    }
+    if (u.type === "jetpack") {
+      return (
+        <group key={i} ref={(el) => (groupRefs.current[i] = el)} position={[u.x, y, u.z]}>
+          <mesh>
+            <boxGeometry args={[0.4, 0.5, 0.2]} />
+            <meshStandardMaterial color="#475569" emissive="#475569" emissiveIntensity={0.5} />
+          </mesh>
+          <mesh position={[0, -0.3, 0]}>
+            <sphereGeometry args={[0.1, 8, 8]} />
+            <meshBasicMaterial color="#f97316" />
           </mesh>
         </group>
       );
@@ -1833,11 +2161,72 @@ function UIStyles() {
         touch-action: manipulation;
         pointer-events: auto;
         position: relative;
-        z-index: 99999;
+        z-index: 10;
+        outline: none;
+        border: none;
+        user-select: none;
       }
 
-      .start-cta:active { transform: translateY(1px) scale(0.995); }
-      .start-cta:hover { box-shadow: 0 8px 30px rgba(124,58,237,0.14); transform: translateY(-4px); }
+      .modal-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        display: grid;
+        place-items: center;
+        z-index: 20000;
+        animation: modalFadeIn 0.3s ease;
+      }
+
+      @keyframes modalFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      .modal-content {
+        position: relative;
+        width: 90%;
+        max-width: 480px;
+        padding: 32px;
+        background: rgba(15, 23, 42, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 28px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        animation: modalSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      @keyframes modalSlideUp {
+        from { opacity: 0; transform: translateY(30px) scale(0.95); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .btn-close {
+        position: relative;
+        background: rgba(255,255,255,0.1);
+        border: none;
+        color: white;
+        font-size: 24px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        transition: all 0.2s ease;
+      }
+      .btn-close:hover { background: rgba(255,255,255,0.2); transform: rotate(90deg); }
+
+      .mode-card {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+      }
+      .mode-card:active { transform: scale(0.97); }
+      .mode-card.locked { filter: grayscale(1) opacity(0.5); cursor: not-allowed; }
+      .mode-card.active { box-shadow: 0 0 20px rgba(124, 58, 237, 0.2); }
+
+      .start-cta:active { transform: translateY(1px) scale(0.98); }
+      .start-cta:hover { box-shadow: 0 8px 30px rgba(124,58,237,0.14); transform: translateY(-2px); }
 
       .hint {
         margin-top: 12px;
@@ -2240,7 +2629,7 @@ function UIStyles() {
 }
 
 
-function ModernHUD({
+const ModernHUD = memo(function ModernHUD({
   score,
   runCoins,
   paused,
@@ -2353,7 +2742,7 @@ return (
       )}
     </>
   );
-}
+});
 
 function ThemePanel({ current, onSelect }) {
   return (
@@ -2407,8 +2796,210 @@ function LevelIntro({ level }) {
 }
 
 
+// ---------------- MODES PANEL ----------------
+const ModesPanel = memo(function ModesPanel({ open, onClose, currentMode, onSelectMode, level, onUIButtonClick }) {
+  if (!open) return null;
+  const raceUnlocked = level >= 30;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: 440, background: "rgba(15, 23, 42, 0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <div>
+            <h2 style={{ margin: 0, color: "white", fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em" }}>Game Modes</h2>
+            <p style={{ margin: "4px 0 0 0", color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Choose your challenge</p>
+          </div>
+          <button className="btn-close" onClick={onClose} style={{ background: "rgba(255,255,255,0.1)", borderRadius: "50%", width: 36, height: 36 }}>×</button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div 
+            className={`mode-card ${currentMode === 'classic' ? 'active' : ''}`}
+            onClick={() => { onSelectMode('classic'); onUIButtonClick(); onClose(); }}
+            style={{ 
+              padding: 20, borderRadius: 18, cursor: "pointer", position: "relative", overflow: "hidden",
+              background: currentMode === 'classic' ? "linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(124, 58, 237, 0.05))" : "rgba(255,255,255,0.03)",
+              border: `2px solid ${currentMode === 'classic' ? "#7c3aed" : "rgba(255,255,255,0.08)"}`,
+              transition: "all 0.2s ease"
+            }}
+          >
+            <div style={{ fontWeight: 800, color: "white", fontSize: 18, marginBottom: 4 }}>🏃 Classic Run</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.4 }}>The original endless experience. Push your limits and set new high scores.</div>
+          </div>
+
+          <div 
+            className={`mode-card ${!raceUnlocked ? 'locked' : ''} ${currentMode === 'challenge' ? 'active' : ''}`}
+            onClick={() => { 
+              if (raceUnlocked) { onSelectMode('challenge'); onUIButtonClick(); onClose(); }
+            }}
+            style={{ 
+              padding: 20, borderRadius: 18, cursor: raceUnlocked ? "pointer" : "default", position: "relative", overflow: "hidden",
+              background: currentMode === 'challenge' ? "linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(6, 182, 212, 0.05))" : "rgba(255,255,255,0.03)",
+              border: `2px solid ${currentMode === 'challenge' ? "#06b6d4" : "rgba(255,255,255,0.08)"}`,
+              opacity: raceUnlocked ? 1 : 0.7,
+              transition: "all 0.2s ease"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+              <div style={{ fontWeight: 800, color: "white", fontSize: 18 }}>🏁 Challenge Race</div>
+              {!raceUnlocked && (
+                <div style={{ background: "#ef4444", color: "white", padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 900, textTransform: "uppercase" }}>
+                  LOCKED (Lv. 30)
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.4 }}>Race against a pro AI runner. Be the first to reach 1,000m to win!</div>
+            {!raceUnlocked && (
+              <div style={{ marginTop: 12, padding: "8px 12px", background: "rgba(239, 68, 68, 0.1)", borderRadius: 8, color: "#f87171", fontSize: 11, fontWeight: 600 }}>
+                Complete {30 - level} more levels to unlock this mode.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ---------------- AI RUNNER (Challenge Mode) ----------------
+const AIRunner = memo(function AIRunner({ 
+  playerRef, 
+  speedRef, 
+  obstaclesRef, 
+  gameOver, 
+  onFinish,
+  active,
+  winner
+}) {
+  const ref = useRef();
+  const aiLane = useRef(1);
+  const aiSpeed = useRef(0.28);
+  const aiZ = useRef(0);
+  const swing = useRef(0);
+  const decisionCooldown = useRef(0);
+  const boostTimer = useRef(0);
+  const FINISH_Z = -1200; // Target distance
+
+  useFrame((state, delta) => {
+    if (!ref.current || !active || gameOver || winner) return;
+
+    // AI Logic: Dodge obstacles
+    decisionCooldown.current -= delta;
+    if (decisionCooldown.current <= 0) {
+      decisionCooldown.current = 0.25 + Math.random() * 0.2;
+      
+      // Look for obstacles in our lane or nearby
+      const ahead = (obstaclesRef.current || []).find(o => o.z < aiZ.current && o.z > aiZ.current - 14);
+      if (ahead && ahead.lane === aiLane.current) {
+        // Skill check: 90% chance to dodge correctly
+        if (Math.random() > 0.1) {
+           const possible = [0, 1, 2].filter(l => l !== aiLane.current);
+           aiLane.current = possible[Math.floor(Math.random() * possible.length)];
+        }
+      }
+    }
+
+    // Smooth Lane Movement
+    const targetX = LANES[aiLane.current];
+    ref.current.position.x = THREE.MathUtils.lerp(ref.current.position.x, targetX, 1 - Math.exp(-18 * delta));
+
+    // Speed Dynamics
+    const playerSpeed = speedRef.current || 0.28;
+    // AI target speed depends on distance to player
+    const distToPlayer = aiZ.current - (playerRef.current?.z || 0);
+    let speedMult = 0.98 + Math.random() * 0.04;
+    
+    // Ruberbanding: If AI is too far behind, speed up. If too far ahead, slow down.
+    if (distToPlayer > 10) speedMult += 0.05;
+    if (distToPlayer < -15) speedMult -= 0.05;
+
+    aiSpeed.current = THREE.MathUtils.lerp(aiSpeed.current, playerSpeed * speedMult, 0.05);
+    aiZ.current -= aiSpeed.current * delta * 60;
+    ref.current.position.z = aiZ.current;
+
+    // Check Finish
+    if (aiZ.current < FINISH_Z) {
+      onFinish("AI");
+    }
+
+    // Animation
+    swing.current += aiSpeed.current * 18 * delta;
+    if (ref.current.children[2]) ref.current.children[2].rotation.x = Math.sin(swing.current) * 0.7;
+    if (ref.current.children[3]) ref.current.children[3].rotation.x = -Math.sin(swing.current) * 0.7;
+  });
+
+  if (!active) return null;
+
+  return (
+    <group ref={ref} position={[0, 0.5, 0]}>
+      {/* AI Body */}
+      <mesh castShadow position={[0, 0.8, 0]}>
+        <boxGeometry args={[0.52, 1.05, 0.38]} />
+        <meshStandardMaterial color="#06b6d4" emissive="#06b6d4" emissiveIntensity={0.2} />
+      </mesh>
+      {/* AI Head */}
+      <mesh castShadow position={[0, 1.6, 0]}>
+        <sphereGeometry args={[0.34]} />
+        <meshStandardMaterial color="#ffd166" />
+      </mesh>
+      {/* Limbs */}
+      <mesh position={[-0.15, 0.2, 0]}><boxGeometry args={[0.22, 0.65, 0.22]} /><meshStandardMaterial color="#111827" /></mesh>
+      <mesh position={[0.15, 0.2, 0]}><boxGeometry args={[0.22, 0.65, 0.22]} /><meshStandardMaterial color="#111827" /></mesh>
+      
+      {/* AI HUD */}
+      <group position={[0, 2.6, 0]}>
+        <Text fontSize={0.25} color="white" fontWeight={900} anchorX="center">PRO AI</Text>
+        <Text position={[0, -0.3, 0]} fontSize={0.18} color="#22d3ee" anchorX="center">
+          {(aiSpeed.current * 100).toFixed(0)} KM/H
+        </Text>
+      </group>
+    </group>
+  );
+});
+
+// ---------------- RACE WINNER OVERLAY ----------------
+function RaceWinnerPopup({ winner, onRetry, onExit, onUIButtonClick }) {
+  if (!winner) return null;
+  const isPlayer = winner === "Player";
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 10000 }}>
+      <div className="modal-content" style={{ 
+        textAlign: "center", maxWidth: 380, padding: 40,
+        background: isPlayer ? "linear-gradient(135deg, #064e3b, #020617)" : "linear-gradient(135deg, #450a0a, #020617)",
+        borderRadius: 32, border: `2px solid ${isPlayer ? "#059669" : "#dc2626"}`
+      }}>
+        <div style={{ fontSize: 60, marginBottom: 10 }}>{isPlayer ? "🏆" : "💀"}</div>
+        <h1 style={{ color: "white", fontSize: 32, fontWeight: 900, margin: "0 0 10px 0" }}>
+          {isPlayer ? "YOU WON!" : "AI WON!"}
+        </h1>
+        <p style={{ color: "rgba(255,255,255,0.7)", marginBottom: 30 }}>
+          {isPlayer ? "You outperformed the AI runner. Incredible speed!" : "The AI was too fast this time. Try again!"}
+        </p>
+        
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <button 
+            className="start-cta" 
+            onClick={() => { onUIButtonClick(); onRetry(); }}
+            style={{ background: isPlayer ? "#059669" : "#dc2626", width: "100%" }}
+          >
+            Rematch
+          </button>
+          <button 
+            className="btn-ghost" 
+            onClick={() => { onUIButtonClick(); onExit(); }}
+            style={{ width: "100%", padding: 15 }}
+          >
+            Back to Menu
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Start Screen
-function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onOpenCollection, onOpenLevels, onUIButtonClick, onToggleTheme, level, missionUI }) {
+function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onOpenCollection, onOpenLevels, onOpenCustomize, onOpenModes, onUIButtonClick, onToggleTheme, level, missionUI }) {
   useEffect(() => {
     console.log("StartScreen Active");
     function key(e) {
@@ -2496,16 +3087,31 @@ function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onOpenColle
               className="start-cta"
               onClick={() => {
                 onUIButtonClick && onUIButtonClick();
-                onOpenLevels && onOpenLevels();
+                onOpenModes && onOpenModes();
               }}
               onTouchStart={(e) => {
                 e.stopPropagation();
                 onUIButtonClick && onUIButtonClick();
-                onOpenLevels && onOpenLevels();
+                onOpenModes && onOpenModes();
               }}
               style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", minWidth: 140 }}
             >
-              Levels
+              Modes
+            </button>
+            <button
+              className="start-cta"
+              onClick={() => {
+                onUIButtonClick && onUIButtonClick();
+                onOpenCustomize && onOpenCustomize();
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                onUIButtonClick && onUIButtonClick();
+                onOpenCustomize && onOpenCustomize();
+              }}
+              style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", minWidth: 140 }}
+            >
+              Customize
             </button>
           </div>
 
@@ -2773,7 +3379,10 @@ function ShopOverlay({ open, onClose, coins, upgrades, onBuy, onUIButtonClick })
   );
 }
 
-// ---------------- MISSION OVERLAY ----------------
+// Removed local CustomizePanel to use imported one
+
+// Inside StartScreen props, add: onOpenCustomize
+// Update StartScreen JSX: add <button>Customize Character</button>
 function MissionOverlay({ open, onClose, dailyMissions, lifetimeMilestones, lifetimeStats, streak, onClaimDaily, onClaimMilestone, onUIButtonClick }) {
   const [tab, setTab] = useState("daily");
   if (!open) return null;
@@ -3019,13 +3628,11 @@ function EventBanner({ event }) {
   );
 }
 
-// ---------------- MAIN ----------------
 export default function App() {
-  // controls as refs to avoid extra re-renders
-  const laneRef = useRef(1);
   const jumpRef = useRef(false);
   const jumpStartRef = useRef(0);
   const slideRef = useRef(0);
+  const laneRef = useRef(1);
 
   const [unlockedLevels, setUnlockedLevels] = useState(() => {
     try {
@@ -3043,7 +3650,18 @@ export default function App() {
   });
 
   const [collectionOpen, setCollectionOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [equippedOutfits, setEquippedOutfits] = useState(() => {
+    try {
+      const stored = localStorage.getItem("game_equipped_outfits");
+      return stored ? JSON.parse(stored) : { Hair: 'h1', Cap: null, Mask: null, Shirt: 's1', Pant: 'p1', Shoes: 'sh1' };
+    } catch { return { Hair: 'h1', Cap: null, Mask: null, Shirt: 's1', Pant: 'p1', Shoes: 'sh1' }; }
+  });
+
   const [levelsOpen, setLevelsOpen] = useState(false);
+  const [modesOpen, setModesOpen] = useState(false);
+  const [gameMode, setGameMode] = useState("classic"); // "classic" or "challenge"
+  const [winner, setWinner] = useState(null);
 
   const [score, setScore] = useState(0);
   const scoreRef = useRef(0);
@@ -3077,6 +3695,10 @@ export default function App() {
 
   const hoverboardRef = useRef(false);
   const [hoverboardActive, setHoverboardActive] = useState(false);
+
+  const jetpackRef = useRef(false);
+  const jetpackTimerRef = useRef(null);
+  const [jetpackActive, setJetpackActive] = useState(false);
 
   // LEVEL + MISSION
   const [level, setLevel] = useState(() => parseInt(localStorage.getItem("game_level") || "1", 10));
@@ -3187,6 +3809,7 @@ export default function App() {
   const activateDoubleRef = useRef(null);
   const activateHoverRef = useRef(null);
   const activateMysteryRef = useRef(null);
+  const activateJetpackRef = useRef(null);
   const playCoinAudioRef = useRef(null);
 
   // constants for durations (ms)
@@ -3244,6 +3867,15 @@ try {
      const loader = setTimeout(() => setLoading(false), 900);
      return () => clearTimeout(loader);
    }, []);
+
+  useEffect(() => {
+    const handleOutfitChange = (e) => {
+      setEquippedOutfits(e.detail);
+    };
+    window.addEventListener('outfit_changed', handleOutfitChange);
+    return () => window.removeEventListener('outfit_changed', handleOutfitChange);
+  }, []);
+
 
 useEffect(() => {
      try {
@@ -3328,6 +3960,9 @@ useEffect(() => {
       shieldTimerRef.current = null;
     }
     setShield(true);
+    if (spawnTextRef.current) {
+      spawnTextRef.current("SHIELD ACTIVE", { x: 50, y: 40, color: "#10b981", size: 24 });
+    }
     shieldTimerRef.current = setTimeout(() => {
       setShield(false);
       shieldTimerRef.current = null;
@@ -3364,6 +3999,22 @@ useEffect(() => {
       window.hoverboardTimeout = null;
     }, duration);
   }, [upgrades?.hoverboard]);
+
+  const activateJetpack = useCallback((ms) => {
+    const duration = typeof ms === "number" ? ms : 10000;
+    if (jetpackTimerRef.current) {
+      clearTimeout(jetpackTimerRef.current);
+      jetpackTimerRef.current = null;
+    }
+    jetpackRef.current = true;
+    setJetpackActive(true);
+    console.log("Jetpack active");
+    jetpackTimerRef.current = setTimeout(() => {
+      jetpackRef.current = false;
+      setJetpackActive(false);
+      jetpackTimerRef.current = null;
+    }, duration);
+  }, []);
 
   const activateMysteryBox = useCallback(() => {
     const r = Math.random();
@@ -3606,6 +4257,7 @@ useEffect(() => {
     let startX = 0;
     let startY = 0;
     let swipeThreshold = 40;
+    let lastSwipeTime = 0;
 
     function touchStart(e) {
       if (e.target.closest('button')) return;
@@ -3629,11 +4281,19 @@ useEffect(() => {
       const dy = t.clientY - startY;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
+      const now = Date.now();
 
       if (Math.max(absX, absY) > swipeThreshold) {
         if (absX > absY) {
-          if (dx > 0) laneRef.current = Math.min(laneRef.current + 1, 2);
-          else laneRef.current = Math.max(laneRef.current - 1, 0);
+          if (now - lastSwipeTime < 250) {
+             if (dx > 0) laneRef.current = Math.min(laneRef.current + 2, 2);
+             else laneRef.current = Math.max(laneRef.current - 2, 0);
+             lastSwipeTime = 0;
+          } else {
+             if (dx > 0) laneRef.current = Math.min(laneRef.current + 1, 2);
+             else laneRef.current = Math.max(laneRef.current - 1, 0);
+             lastSwipeTime = now;
+          }
         } else {
           if (dy < 0) triggerJump();
           else triggerSlide();
@@ -3894,6 +4554,7 @@ useEffect(() => {
     activateDoubleRef.current = activateDoubleCoins;
     activateHoverRef.current = activateHoverboard;
     activateMysteryRef.current = activateMysteryBox;
+    activateJetpackRef.current = activateJetpack;
     playCoinAudioRef.current = audio.refs?.coinRef;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audio, upgrades]);
@@ -4009,7 +4670,11 @@ useEffect(() => {
 
       // Score with event multiplier
       scoreRef.current += delta * 14 * multiplierRef.current * (eventMultiplier?.score || 1);
-      setScore(Math.max(0, Math.floor(scoreRef.current || 0)));
+      
+      // Throttle state update to ~10fps for UI performance
+      if (Math.random() < 0.1 || !started) {
+        setScore(Math.max(0, Math.floor(scoreRef.current || 0)));
+      }
 
       // Distance tracking
       setRunDistance(prev => prev + (speedRef.current * delta * 60 * 0.1)); // Scale for "meters"
@@ -4029,11 +4694,16 @@ useEffect(() => {
         <>
           <StartScreen 
             started={started} 
-            onStart={handleStart} 
+            onStart={() => {
+              setWinner(null);
+              handleStart();
+            }} 
             onOpenShop={onOpenShop} 
             onOpenMissions={() => setMissionsOpen(true)}
             onOpenCollection={() => setCollectionOpen(true)}
             onOpenLevels={() => setLevelsOpen(true)}
+            onOpenCustomize={() => setCustomizeOpen(true)}
+            onOpenModes={() => setModesOpen(true)}
             onUIButtonClick={playClick} 
             onToggleTheme={() => setShowThemePanel(v => !v)} 
             level={level}
@@ -4101,7 +4771,10 @@ useEffect(() => {
               gameOver={gameOver || paused}
               skinColors={skinColors}
               hoverboardActive={hoverboardActive}
+              jetpackActive={jetpackActive}
+              equippedOutfits={equippedOutfits}
             />
+
             <BackgroundAnimations theme={THEMES[themeIndex]} speedRef={speedRef} playerRef={playerRef} gameOver={gameOver || paused} />
             <Track playerRef={playerRef} theme={THEMES[themeIndex]} gameOver={gameOver || paused} />
             <Coins
@@ -4140,6 +4813,7 @@ useEffect(() => {
               obstaclesRef={obstaclesRef}
               spawnCoinsForObstacleRef={spawnCoinsForObstacleRef}
               spawnDelay={spawnDelayRef.current}
+              jetpackActive={jetpackActive}
             />
             <Boosters playerRef={playerRef} activateMagnetRef={activateMagnetRef} activateShieldRef={activateShieldRef} playShieldRef={playShieldRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} />
 
@@ -4147,10 +4821,63 @@ useEffect(() => {
 
             <SpeedLines playerRef={playerRef} speedRef={speedRef} gameOver={gameOver || paused} />
             <RunnerFX playerRef={playerRef} speedRef={speedRef} crashSignal={crashSignal} gameOver={gameOver || paused} />
+            <AIRunner 
+              active={gameMode === "challenge"}
+              playerRef={playerRef}
+              speedRef={speedRef}
+              obstaclesRef={obstaclesRef}
+              gameOver={gameOver || paused}
+              winner={winner}
+              onFinish={(w) => {
+                setWinner(w);
+                setGameOver(true);
+              }}
+            />
             <CameraFollow playerRef={playerRef} speedRef={speedRef} crashFxRef={crashFxRef} />
           </group>
         )}
       </Canvas>
+
+      {started && gameMode === "challenge" && !winner && (
+        <div style={{ 
+          position: "absolute", top: 100, left: "50%", transform: "translateX(-50%)",
+          background: "rgba(0,0,0,0.6)", padding: "10px 20px", borderRadius: 20,
+          color: "white", fontWeight: 800, border: "1px solid rgba(255,255,255,0.2)",
+          backdropFilter: "blur(10px)", zIndex: 100
+        }}>
+          🏁 RACE TO 1,000M
+        </div>
+      )}
+
+      <ModesPanel 
+        open={modesOpen} 
+        onClose={() => setModesOpen(false)} 
+        currentMode={gameMode} 
+        onSelectMode={(m) => setGameMode(m)}
+        level={level}
+        onUIButtonClick={playClick}
+      />
+
+      <RaceWinnerPopup 
+        winner={winner}
+        onRetry={() => {
+          setRestartKey(k => k + 1);
+          setGameOver(false);
+          setWinner(null);
+          setStarted(true);
+          setScore(0);
+          scoreRef.current = 0;
+          speedRef.current = 0.28;
+          playBgm && playBgm();
+        }}
+        onExit={() => {
+          setWinner(null);
+          setStarted(false);
+          setGameOver(false);
+          setRestartKey(k => k + 1);
+        }}
+        onUIButtonClick={playClick}
+      />
 
       {started && !gameOver && (
         <>
@@ -4224,6 +4951,20 @@ useEffect(() => {
 
 
 
+
+      <CustomizePanel
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        equipped={equippedOutfits}
+        onEquip={(cat, id) => {
+          const next = { ...equippedOutfits, [cat]: id };
+          setEquippedOutfits(next);
+          localStorage.setItem("game_equipped_outfits", JSON.stringify(next));
+          console.log("Outfit equipped:", id);
+        }}
+        onUIButtonClick={playClick}
+        skinColor={skinColors}
+      />
 
       <GameOverOverlay
         gameOver={gameOver}
