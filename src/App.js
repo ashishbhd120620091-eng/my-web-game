@@ -1158,18 +1158,7 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
     }
   }, []);
 
-  useFrame((state, delta) => {
-    if (!playerRef.current || gameOver) return;
-    const speed = speedRef.current ?? 0.28;
-    const pz = playerRef.current.z;
-
-    // Force implement sky coin spawning during jetpack
-    if (jetpackActive && pz < lastSkySpawnRef.current - 25) {
-      spawnSkyCoins(pz);
-      lastSkySpawnRef.current = pz;
-      console.log("Jetpack active: spawning sky coins");
-    }
-  });
+  // Sky-coin spawning is handled inside the main coin useFrame below (single loop for performance)
 
   const spawnCoinsForObstacle = useCallback((anchorObs) => {
     if (jetpackActive) return;
@@ -1236,6 +1225,17 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
     if (!playerRef.current || gameOver) return;
     const speed = speedRef.current ?? 0.28;
     const pz = playerRef.current.z;
+
+    // Sky coin spawning during jetpack (merged from removed duplicate useFrame)
+    if (jetpackActive && pz < lastSkySpawnRef.current - 25) {
+      spawnSkyCoins(pz);
+      lastSkySpawnRef.current = pz;
+      console.log("Jetpack active: sky coins spawned at z", Math.round(pz));
+    }
+    // Reset sky spawn tracker when jetpack ends
+    if (!jetpackActive && lastSkySpawnRef.current !== 0) {
+      lastSkySpawnRef.current = 0;
+    }
 
     coins.current.forEach((c, i) => {
       if (!c.inCluster) return;
@@ -1356,22 +1356,69 @@ const Obstacles = memo(function Obstacles({
     setGameOver(true);
   }
 
+  // ============ AI OBSTACLE SYSTEM ============
   function generatePattern() {
     const steps = [];
-    const types = ["jump", "slide", "slime", "boost"]; // REMOVED BROKEN BLACK OBSTACLE (lane)
     const length = 60;
 
-    for (let i = 0; i < length; i++) {
-      const type = types[Math.floor(Math.random() * types.length)];
-      const lane = Math.floor(Math.random() * 3);
-      
-      // Prevent impossible patterns by ensuring at least one lane is clear or passable
-      if (i > 0 && steps[i-1].type === "lane" && type === "lane" && steps[i-1].lane !== lane) {
-        // Two lane obstacles in a row but different lanes is fine
+    // Weighted types — slime REMOVED (broken), train (lane) kept with low weight
+    const types =   ["jump", "slide", "lane", "boost"];
+    const weights = [ 0.38,   0.38,   0.16,   0.08];
+
+    function pickType() {
+      const r = Math.random();
+      let acc = 0;
+      for (let i = 0; i < types.length; i++) {
+        acc += weights[i];
+        if (r < acc) return types[i];
       }
-      
-      steps.push({ type, lane });
+      return "jump";
     }
+
+    let prevType = null;
+    let prevLane = -1;
+    let trainStreak = 0;
+
+    for (let i = 0; i < length; i++) {
+      let type = pickType();
+      let lane = Math.floor(Math.random() * 3);
+
+      // RULE 1: Never two train obstacles in a row (unavoidable death)
+      if (type === "lane") {
+        trainStreak++;
+        if (trainStreak >= 2 || prevType === "lane") {
+          type = Math.random() > 0.5 ? "jump" : "slide";
+          trainStreak = 0;
+        }
+      } else {
+        trainStreak = 0;
+      }
+
+      // RULE 2: Never same type AND same lane back-to-back (unbalanced)
+      if (type === prevType && lane === prevLane) {
+        lane = (lane + 1) % 3;
+      }
+
+      // RULE 3: boost never repeats consecutively
+      if (prevType === "boost" && type === "boost") {
+        type = "jump";
+      }
+
+      // RULE 4: Every 6 steps inject a guaranteed safe open slot (fairness gap)
+      if (i > 0 && i % 6 === 0) {
+        type = Math.random() > 0.5 ? "jump" : "slide";
+        lane = 1; // center — always visible
+      }
+
+      // RULE 5: Train obstacle — always ensure at least one alternate lane is free
+      // (enforced by single-train-per-cluster rule above)
+
+      steps.push({ type, lane });
+      prevType = type;
+      prevLane = lane;
+    }
+
+    console.log("AI obstacle generated:", steps.slice(0, 6).map(s => s.type).join(", ") + "...");
     return steps;
   }
 
@@ -1413,8 +1460,8 @@ const Obstacles = memo(function Obstacles({
       let hitDz = 1.0;
       
       if (o.type === "lane") {
-        hitDx = 0.75;
-        hitDz = 1.8;
+        hitDx = 0.82;   // matches the 1.7-wide train body exactly
+        hitDz = 1.6;
       }
 
       const dx = Math.abs(o.x - playerRef.current.x);
@@ -1457,9 +1504,6 @@ const Obstacles = memo(function Obstacles({
               if (m.progress >= m.target) finalizeMissionCompletion(m);
             }
           }
-        } else if (o.type === "slime") {
-          speedRef.current = Math.max(0.15, speedRef.current * 0.7);
-          respawn(o);
         } else if (o.type === "boost") {
           speedRef.current = Math.min(1.8, speedRef.current * 1.3);
           respawn(o);
@@ -1485,7 +1529,8 @@ const Obstacles = memo(function Obstacles({
       if (o.z > pz + 28) respawn(o);
 
       if (g) {
-        const y = o.type === "lane" ? 1.0 : o.type === "jump" ? 0.45 : o.type === "slide" ? 1.7 : 0.85;
+        // lane/train Y=0 so the group sits on the track floor; jump Y=0.45; slide Y=1.7; boost Y=0.85
+        const y = o.type === "lane" ? 0 : o.type === "jump" ? 0.45 : o.type === "slide" ? 1.7 : 0.85;
         g.position.set(o.x, y, o.z);
       }
     });
@@ -1514,7 +1559,8 @@ const Obstacles = memo(function Obstacles({
     o.x = LANES[step.lane];
     o.type = step.type;
 
-    console.log("Obstacle Respawned:", o.type, "at z:", o.z);
+    // Keep respawn log for integration verification
+    // console.log("Obstacle Respawned:", o.type, "at z:", o.z);
 
     if (spawnCoinsForObstacleRef?.current) {
       spawnCoinsForObstacleRef.current(o);
@@ -1553,40 +1599,54 @@ const Obstacles = memo(function Obstacles({
     if (o.type === "lane") {
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
-          {/* Main Train Body */}
-          <mesh castShadow position={[0, 0.5, 0]}>
-            <boxGeometry args={[1.7, 1.8, 8.0]} />
-            <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.2} />
+          {/* ── TRAIN BODY (sits on floor, origin = ground level) ── */}
+          <mesh castShadow position={[0, 0.9, 0]}>
+            <boxGeometry args={[1.7, 1.8, 7.5]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.85} roughness={0.15} />
           </mesh>
-          {/* Front Cab */}
-          <mesh position={[0, 0.6, -4.01]}>
-            <boxGeometry args={[1.5, 1.0, 0.1]} />
-            <meshStandardMaterial color="#1e293b" />
+          {/* Top ridge */}
+          <mesh position={[0, 1.85, 0]}>
+            <boxGeometry args={[1.3, 0.12, 7.0]} />
+            <meshStandardMaterial color="#0f172a" />
+          </mesh>
+          {/* ── FRONT FACE (facing player — positive Z) ── */}
+          <mesh position={[0, 0.9, 3.76]}>
+            <boxGeometry args={[1.7, 1.8, 0.06]} />
+            <meshStandardMaterial color="#0f172a" />
+          </mesh>
+          {/* Warning stripe on front — high-visibility yellow */}
+          <mesh position={[0, 0.55, 3.78]}>
+            <boxGeometry args={[1.6, 0.28, 0.04]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={1.2} />
           </mesh>
           {/* Front Window */}
-          <mesh position={[0, 0.8, -4.07]}>
-            <boxGeometry args={[1.2, 0.5, 0.05]} />
-            <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.8} transparent opacity={0.6} />
+          <mesh position={[0, 1.15, 3.79]}>
+            <boxGeometry args={[1.1, 0.55, 0.04]} />
+            <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.7} transparent opacity={0.65} />
           </mesh>
           {/* Headlights */}
-          <mesh position={[-0.4, 0.1, -4.01]}>
-            <sphereGeometry args={[0.15, 16, 16]} />
-            <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={1.2} />
+          <mesh position={[-0.45, 0.35, 3.79]}>
+            <sphereGeometry args={[0.13, 12, 12]} />
+            <meshStandardMaterial color="#fef9c3" emissive="#fef9c3" emissiveIntensity={2.0} />
           </mesh>
-          <mesh position={[0.4, 0.1, -4.01]}>
-            <sphereGeometry args={[0.15, 16, 16]} />
-            <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={1.2} />
+          <mesh position={[0.45, 0.35, 3.79]}>
+            <sphereGeometry args={[0.13, 12, 12]} />
+            <meshStandardMaterial color="#fef9c3" emissive="#fef9c3" emissiveIntensity={2.0} />
           </mesh>
-          {/* Top Detail */}
-          <mesh position={[0, 1.45, 0]}>
-            <boxGeometry args={[1.3, 0.15, 7.0]} />
-            <meshStandardMaterial color="#1e293b" />
+          {/* Side neon stripe */}
+          <mesh position={[0.86, 0.9, 0]}>
+            <boxGeometry args={[0.03, 1.6, 7.0]} />
+            <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.6} />
           </mesh>
-          {/* Side Panels */}
+          <mesh position={[-0.86, 0.9, 0]}>
+            <boxGeometry args={[0.03, 1.6, 7.0]} />
+            <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.6} />
+          </mesh>
+          {/* Undercarriage / wheels */}
           {[-2.5, 0, 2.5].map((z, j) => (
-            <mesh key={j} position={[0.86, 0.7, z]}>
-              <boxGeometry args={[0.02, 0.7, 1.5]} />
-              <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.3} transparent opacity={0.4} />
+            <mesh key={j} position={[0, 0.12, z]}>
+              <boxGeometry args={[1.9, 0.22, 1.0]} />
+              <meshStandardMaterial color="#0f172a" />
             </mesh>
           ))}
         </group>
@@ -1622,20 +1682,8 @@ const Obstacles = memo(function Obstacles({
       );
     }
 
-    if (o.type === "slime") {
-      return (
-        <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.48, 0]}>
-            <planeGeometry args={[2.2, 3.5]} />
-            <meshStandardMaterial color="#4ade80" transparent opacity={0.6} metalness={0} roughness={1} />
-          </mesh>
-          <mesh position={[0, -0.45, 0]}>
-            <boxGeometry args={[1.8, 0.05, 3]} />
-            <meshStandardMaterial color="#22c55e" transparent opacity={0.4} />
-          </mesh>
-        </group>
-      );
-    }
+    // slime REMOVED — was giving incorrect near-miss effect and broken gameplay
+    // (green ground powerup fully removed from spawn, collision, and render)
 
     if (o.type === "boost") {
       return (
@@ -2643,6 +2691,7 @@ const ModernHUD = memo(function ModernHUD({
   doubleActive = false,
   shield = false,
   hoverboardActive = false,
+  jetpackActive = false,
 }) {
 
   const comboBumpKey = useRef(0);
@@ -2708,6 +2757,7 @@ return (
         <div className={`hud-powerup ${doubleActive ? "active" : "inactive"}`} title="Double">x2</div>
         <div className={`hud-powerup ${shield ? "active" : "inactive"}`} title="Shield">🛡️</div>
         <div className={`hud-powerup ${hoverboardActive ? "active" : "inactive"}`} title="Hover">🛹</div>
+        <div className={`hud-powerup ${jetpackActive ? "active" : "inactive"}`} title="Jetpack" style={jetpackActive ? { background: "linear-gradient(135deg,#f97316,#ea580c)" } : {}}>🚀</div>
       </div>
 
       {combo >= 2 && (
@@ -4397,10 +4447,7 @@ useEffect(() => {
       const proposed = Math.min(MAX_SPEED, speedRef.current + perSecond * delta * 60);
       speedRef.current += (proposed - speedRef.current) * Math.min(1, 4 * delta);
       
-      // DEBUG LOG: Throttled to avoid console spam
-      if (Math.random() < 0.01) {
-        console.log("Current Speed:", speedRef.current.toFixed(4), "Level:", levelRef.current);
-      }
+      // Speed throttled log removed for performance
     };
 
     rafId = requestAnimationFrame(loop);
@@ -4788,6 +4835,7 @@ useEffect(() => {
               obstaclesRef={obstaclesRef}
               gameOver={gameOver || paused}
               spawnCoinsForObstacleRef={spawnCoinsForObstacleRef}
+              jetpackActive={jetpackActive}
             />
             <Obstacles
               playerRef={playerRef}
@@ -4817,7 +4865,7 @@ useEffect(() => {
             />
             <Boosters playerRef={playerRef} activateMagnetRef={activateMagnetRef} activateShieldRef={activateShieldRef} playShieldRef={playShieldRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} />
 
-            <PowerUps playerRef={playerRef} activateDoubleRef={activateDoubleRef} activateHoverRef={activateHoverRef} activateMysteryRef={activateMysteryRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} obstaclesRef={obstaclesRef} speedRef={speedRef} />
+            <PowerUps playerRef={playerRef} activateDoubleRef={activateDoubleRef} activateHoverRef={activateHoverRef} activateMysteryRef={activateMysteryRef} activateJetpackRef={activateJetpackRef} playPowerupRef={playPowerupRef} gameOver={gameOver || paused} obstaclesRef={obstaclesRef} speedRef={speedRef} />
 
             <SpeedLines playerRef={playerRef} speedRef={speedRef} gameOver={gameOver || paused} />
             <RunnerFX playerRef={playerRef} speedRef={speedRef} crashSignal={crashSignal} gameOver={gameOver || paused} />
@@ -4898,6 +4946,7 @@ useEffect(() => {
             doubleActive={doubleActive}
             shield={shield}
             hoverboardActive={hoverboardActive}
+            jetpackActive={jetpackActive}
           />
           {showThemePanel && (
             <ThemePanel 
