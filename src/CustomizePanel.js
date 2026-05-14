@@ -23,6 +23,42 @@ const PreviewCharacter = memo(({ equipped, color = "#ff4d6d" }) => {
       <mesh position={[0, 1.6, 0]}>
         <sphereGeometry args={[0.32]} />
         <meshStandardMaterial color="#ffd166" />
+        {/* Hairline/Hair detail */}
+        <mesh position={[0, 0.15, -0.05]}>
+           <boxGeometry args={[0.35, 0.2, 0.4]} />
+           <meshStandardMaterial color="#2d2a2a" />
+        </mesh>
+        {/* Face Features */}
+        <group position={[0, -0.02, 0.25]}>
+          {/* Eyes */}
+          <mesh position={[-0.1, 0.05, 0]}>
+            <sphereGeometry args={[0.05, 12, 12]} />
+            <meshBasicMaterial color="#111827" />
+          </mesh>
+          <mesh position={[0.1, 0.05, 0]}>
+            <sphereGeometry args={[0.05, 12, 12]} />
+            <meshBasicMaterial color="#111827" />
+          </mesh>
+          {/* Eyebrows */}
+          <mesh position={[-0.1, 0.14, 0]}>
+            <boxGeometry args={[0.09, 0.03, 0.02]} />
+            <meshBasicMaterial color="#374151" />
+          </mesh>
+          <mesh position={[0.1, 0.14, 0]}>
+            <boxGeometry args={[0.09, 0.03, 0.02]} />
+            <meshBasicMaterial color="#374151" />
+          </mesh>
+          {/* Nose */}
+          <mesh position={[0, -0.03, 0.02]}>
+            <coneGeometry args={[0.03, 0.06, 8]} />
+            <meshStandardMaterial color="#ffd166" />
+          </mesh>
+          {/* Mouth */}
+          <mesh position={[0, -0.12, 0]}>
+            <boxGeometry args={[0.14, 0.03, 0.02]} />
+            <meshBasicMaterial color="#9f1239" />
+          </mesh>
+        </group>
       </mesh>
       {/* Legs */}
       <mesh position={[-0.15, 0.2, 0]}>

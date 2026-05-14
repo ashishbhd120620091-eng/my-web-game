@@ -269,33 +269,51 @@ const Character = memo(function Character({
         <sphereGeometry args={[0.32]} />
         <meshStandardMaterial color={skinColors?.head || "#ffd166"} />
         
+        {/* Hairline/Hair detail */}
+        <mesh position={[0, 0.15, -0.05]}>
+           <boxGeometry args={[0.35, 0.2, 0.4]} />
+           <meshStandardMaterial color="#2d2a2a" />
+        </mesh>
+
         {/* Face Features */}
-        <group position={[0, 0, 0.22]}>
-          {/* Eyes */}
-          <mesh position={[-0.12, 0.05, 0]}>
-            <sphereGeometry args={[0.04, 8, 8]} />
+        <group position={[0, -0.02, 0.25]}>
+          {/* Eyes - styled and slightly recessed */}
+          <mesh position={[-0.1, 0.05, 0]}>
+            <sphereGeometry args={[0.05, 12, 12]} />
             <meshBasicMaterial color="#111827" />
           </mesh>
-          <mesh position={[0.12, 0.05, 0]}>
-            <sphereGeometry args={[0.04, 8, 8]} />
+          <mesh position={[0.1, 0.05, 0]}>
+            <sphereGeometry args={[0.05, 12, 12]} />
             <meshBasicMaterial color="#111827" />
           </mesh>
           {/* Eyebrows */}
-          <mesh position={[-0.12, 0.12, 0]}>
-            <boxGeometry args={[0.08, 0.02, 0.01]} />
-            <meshBasicMaterial color="#111827" />
+          <mesh position={[-0.1, 0.14, 0]}>
+            <boxGeometry args={[0.09, 0.03, 0.02]} />
+            <meshBasicMaterial color="#374151" />
           </mesh>
-          <mesh position={[0.12, 0.12, 0]}>
-            <boxGeometry args={[0.08, 0.02, 0.01]} />
-            <meshBasicMaterial color="#111827" />
+          <mesh position={[0.1, 0.14, 0]}>
+            <boxGeometry args={[0.09, 0.03, 0.02]} />
+            <meshBasicMaterial color="#374151" />
+          </mesh>
+          {/* Nose - subtle */}
+          <mesh position={[0, -0.03, 0.02]}>
+            <coneGeometry args={[0.03, 0.06, 8]} />
+            <meshStandardMaterial color={skinColors?.head || "#ffd166"} />
           </mesh>
           {/* Mouth */}
-          <mesh position={[0, -0.1, 0]}>
-            <boxGeometry args={[0.12, 0.02, 0.01]} />
-            <meshBasicMaterial color="#111827" />
+          <mesh position={[0, -0.12, 0]}>
+            <boxGeometry args={[0.14, 0.03, 0.02]} />
+            <meshBasicMaterial color="#9f1239" />
           </mesh>
         </group>
       </mesh>
+
+      {/* Initialize Logs */}
+      {(() => {
+        console.log("Premium graphics loaded");
+        if(jetpackActive) console.log("Jetpack sky mode active");
+        return null;
+      })()}
 
       {/* left leg */}
       <mesh castShadow position={[-0.15, 0.2, 0]}>
@@ -340,17 +358,29 @@ const Character = memo(function Character({
 
       {/* Jetpack Visuals */}
       <group visible={!!jetpackActive} position={[0, 0.8, -0.25]}>
+        {/* Jetpack body */}
         <mesh castShadow>
           <boxGeometry args={[0.6, 0.7, 0.3]} />
-          <meshStandardMaterial color="#475569" metalness={0.8} roughness={0.2} />
+          <meshStandardMaterial color="#475569" metalness={0.9} roughness={0.1} />
         </mesh>
+        {/* Dual Jet Flames */}
         <mesh position={[-0.2, -0.4, 0]} ref={jetpackFlameRef}>
-          <cylinderGeometry args={[0.1, 0, 0.4, 8]} />
-          <meshBasicMaterial color="#f97316" transparent opacity={0.8} />
+          <cylinderGeometry args={[0.1, 0, 0.8, 8]} />
+          <meshBasicMaterial color="#00f5d4" transparent opacity={0.9} emissive="#00f5d4" emissiveIntensity={2.5} />
         </mesh>
         <mesh position={[0.2, -0.4, 0]}>
-          <cylinderGeometry args={[0.1, 0, 0.4, 8]} />
-          <meshBasicMaterial color="#f97316" transparent opacity={0.8} />
+          <cylinderGeometry args={[0.1, 0, 0.8, 8]} />
+          <meshBasicMaterial color="#00f5d4" transparent opacity={0.9} emissive="#00f5d4" emissiveIntensity={2.5} />
+        </mesh>
+        {/* Premium Glow effect */}
+        <mesh position={[0, -0.5, 0]}>
+           <sphereGeometry args={[0.4, 16, 16]} />
+           <meshBasicMaterial color="#00f5d4" transparent opacity={0.35} />
+        </mesh>
+        {/* Premium Smoke Trails */}
+        <mesh position={[0, -0.8, 0.2]}>
+           <coneGeometry args={[0.5, 1.2, 8]} />
+           <meshBasicMaterial color="#ffffff" transparent opacity={0.15} />
         </mesh>
       </group>
     </group>
@@ -1132,10 +1162,10 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
   }, []);
 
   const spawnSkyCoins = useCallback((pz) => {
-    const patternType = Math.floor(Math.random() * 3);
+    const patternType = Math.floor(Math.random() * 4);
     const lane = Math.floor(Math.random() * 3);
-    const count = 8;
-    const spacing = 4;
+    const count = 15;
+    const spacing = 3;
     let placed = 0;
 
     for (let i = 0; i < coins.current.length && placed < count; i++) {
@@ -1143,16 +1173,19 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
       if (c.inCluster) continue;
       c.inCluster = true;
       c.z = pz - 40 - (placed * spacing);
-      if (patternType === 0) { // Straight
+      if (patternType === 0) { // Straight trail
         c.x = LANES[lane];
         c.y = SKY_LANE_Y;
-      } else if (patternType === 1) { // Curve
-        c.x = LANES[lane] + Math.sin(placed * 0.8) * 1.5;
-        c.y = SKY_LANE_Y + Math.cos(placed * 0.8) * 1.0;
+      } else if (patternType === 1) { // Curved arc
+        c.x = LANES[lane] + Math.sin(placed * 0.5) * 1.5;
+        c.y = SKY_LANE_Y + Math.sin(placed * 0.3) * 1.0;
+      } else if (patternType === 2) { // Zigzag
+        c.x = LANES[lane] + (placed % 4 < 2 ? 1.5 : -1.5);
+        c.y = SKY_LANE_Y;
       } else { // Lane Shift
         const targetLane = (lane + 1) % 3;
         c.x = THREE.MathUtils.lerp(LANES[lane], LANES[targetLane], placed / (count - 1));
-        c.y = SKY_LANE_Y;
+        c.y = SKY_LANE_Y - Math.sin(placed / count * Math.PI) * 1.5;
       }
       placed++;
     }
@@ -1227,7 +1260,7 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
     const pz = playerRef.current.z;
 
     // Sky coin spawning during jetpack (merged from removed duplicate useFrame)
-    if (jetpackActive && pz < lastSkySpawnRef.current - 25) {
+    if (jetpackActive && pz < lastSkySpawnRef.current - 50) {
       spawnSkyCoins(pz);
       lastSkySpawnRef.current = pz;
       console.log("Jetpack active: sky coins spawned at z", Math.round(pz));
@@ -1467,7 +1500,7 @@ const Obstacles = memo(function Obstacles({
       const dx = Math.abs(o.x - playerRef.current.x);
       const dz = Math.abs(o.z - pz);
 
-      const collided = dz < hitDz && dx < hitDx;
+      const collided = dz < hitDz && dx < hitDx && !jetpackActive;
       if (collided && !isDelayed) {
         const py = playerRef.current.y;
         const ps = playerRef.current.scaleY || 1;
@@ -1600,24 +1633,24 @@ const Obstacles = memo(function Obstacles({
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)}>
           {/* ── TRAIN BODY (sits on floor, origin = ground level) ── */}
-          <mesh castShadow position={[0, 0.9, 0]}>
-            <boxGeometry args={[1.7, 1.8, 7.5]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.85} roughness={0.15} />
+          <mesh castShadow position={[0, 1.6, 0]}>
+            <boxGeometry args={[1.7, 3.2, 7.5]} />
+            <meshStandardMaterial color="#e2e8f0" metalness={0.6} roughness={0.3} />
           </mesh>
-          {/* Top ridge */}
-          <mesh position={[0, 1.85, 0]}>
-            <boxGeometry args={[1.3, 0.12, 7.0]} />
+          {/* Top roof section - taller */}
+          <mesh position={[0, 3.3, 0]}>
+            <boxGeometry args={[1.5, 0.25, 7.2]} />
             <meshStandardMaterial color="#0f172a" />
           </mesh>
           {/* ── FRONT FACE (facing player — positive Z) ── */}
-          <mesh position={[0, 0.9, 3.76]}>
-            <boxGeometry args={[1.7, 1.8, 0.06]} />
-            <meshStandardMaterial color="#0f172a" />
+          <mesh position={[0, 1.6, 3.76]}>
+            <boxGeometry args={[1.7, 3.2, 0.08]} />
+            <meshStandardMaterial color="#1e293b" />
           </mesh>
-          {/* Warning stripe on front — high-visibility yellow */}
-          <mesh position={[0, 0.55, 3.78]}>
-            <boxGeometry args={[1.6, 0.28, 0.04]} />
-            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={1.2} />
+          {/* Warning stripe on front — extra wide and bright */}
+          <mesh position={[0, 1.25, 3.82]}>
+            <boxGeometry args={[1.8, 0.4, 0.05]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={1.5} />
           </mesh>
           {/* Front Window */}
           <mesh position={[0, 1.15, 3.79]}>
@@ -1641,6 +1674,15 @@ const Obstacles = memo(function Obstacles({
           <mesh position={[-0.86, 0.9, 0]}>
             <boxGeometry args={[0.03, 1.6, 7.0]} />
             <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.6} />
+          </mesh>
+          {/* Side Subway Stripe */}
+          <mesh position={[0.86, 1.6, 0]}>
+            <boxGeometry args={[0.04, 0.2, 7.5]} />
+            <meshStandardMaterial color="#f43f5e" />
+          </mesh>
+          <mesh position={[-0.86, 1.6, 0]}>
+            <boxGeometry args={[0.04, 0.2, 7.5]} />
+            <meshStandardMaterial color="#f43f5e" />
           </mesh>
           {/* Undercarriage / wheels */}
           {[-2.5, 0, 2.5].map((z, j) => (
