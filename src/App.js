@@ -173,14 +173,21 @@ const Character = memo(function Character({
 
     if (jetpackActive) {
       // Smoothly move to sky lane
-      ref.current.position.y = THREE.MathUtils.lerp(ref.current.position.y, SKY_LANE_Y + Math.sin(state.clock.elapsedTime * 4) * 0.2, 0.1);
-      ref.current.rotation.x = THREE.MathUtils.lerp(ref.current.rotation.x, 0.3, 0.1); // Tilt forward
+      ref.current.position.y = THREE.MathUtils.lerp(ref.current.position.y, SKY_LANE_Y + Math.sin(state.clock.elapsedTime * 4) * 0.15, 0.08);
+      // Lie horizontally in air (subway surfer pose)
+      ref.current.rotation.x = THREE.MathUtils.lerp(ref.current.rotation.x, 1.4, 0.1);
       vel.current = 0;
 
       // Jetpack flame pulse
       if (jetpackFlameRef.current) {
         jetpackFlameRef.current.scale.y = 1 + Math.sin(state.clock.elapsedTime * 20) * 0.5;
-        jetpackFlameRef.current.material.opacity = 0.6 + Math.random() * 0.4;
+        jetpackFlameRef.current.children.forEach(child => {
+          const mat = child.material;
+          if (mat) {
+            if (mat.uniforms?.opacity) mat.uniforms.opacity.value = 0.6 + Math.random() * 0.4;
+            else mat.opacity = 0.6 + Math.random() * 0.4;
+          }
+        });
       }
     } else {
       // jump
@@ -193,7 +200,9 @@ const Character = memo(function Character({
       }
 
       // gravity integration
-      const gravityMul = vel.current > 0 ? 0.85 : 1.8; // Snappier peak and fall
+      // If falling from jetpack height, reduce gravity briefly for a smoother glide down
+      const isGlidingDown = ref.current.position.y > 3.0;
+      const gravityMul = vel.current > 0 ? 0.85 : (isGlidingDown ? 0.6 : 1.8);
       vel.current -= GRAVITY * gravityMul * delta;
       ref.current.position.y += vel.current * delta;
 
@@ -231,11 +240,11 @@ const Character = memo(function Character({
     const rightArm = ref.current.children[5];
 
     if (jetpackActive) {
-      // Legs wave in air
-      if (leftLeg) leftLeg.rotation.x = Math.sin(state.clock.elapsedTime * 5) * 0.4;
-      if (rightLeg) rightLeg.rotation.x = Math.sin(state.clock.elapsedTime * 5 + Math.PI) * 0.4;
-      if (leftArm) leftArm.rotation.x = -0.3;
-      if (rightArm) rightArm.rotation.x = -0.3;
+      // Lightweight animation: legs slightly waving, arms stretched
+      if (leftLeg) leftLeg.rotation.x = Math.sin(state.clock.elapsedTime * 6) * 0.15;
+      if (rightLeg) rightLeg.rotation.x = Math.sin(state.clock.elapsedTime * 6 + Math.PI) * 0.15;
+      if (leftArm) leftArm.rotation.x = -1.2;
+      if (rightArm) rightArm.rotation.x = -1.2;
     } else {
       if (leftLeg) leftLeg.rotation.x = Math.sin(swing.current) * 0.6;
       if (rightLeg) rightLeg.rotation.x = -Math.sin(swing.current) * 0.6;
@@ -311,7 +320,7 @@ const Character = memo(function Character({
       {/* Initialize Logs */}
       {(() => {
         console.log("Premium graphics loaded");
-        if(jetpackActive) console.log("Jetpack sky mode active");
+        if(jetpackActive) console.log("Jetpack animation active");
         return null;
       })()}
 
@@ -360,27 +369,38 @@ const Character = memo(function Character({
       <group visible={!!jetpackActive} position={[0, 0.8, -0.25]}>
         {/* Jetpack body */}
         <mesh castShadow>
-          <boxGeometry args={[0.6, 0.7, 0.3]} />
+          <boxGeometry args={[0.5, 0.6, 0.25]} />
+          <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.2} />
+        </mesh>
+        {/* Side thrusters */}
+        <mesh position={[-0.3, -0.1, 0]}>
+          <cylinderGeometry args={[0.15, 0.12, 0.4, 8]} />
           <meshStandardMaterial color="#475569" metalness={0.9} roughness={0.1} />
         </mesh>
-        {/* Dual Jet Flames */}
-        <mesh position={[-0.2, -0.4, 0]} ref={jetpackFlameRef}>
-          <cylinderGeometry args={[0.1, 0, 0.8, 8]} />
-          <meshBasicMaterial color="#00f5d4" transparent opacity={0.9} emissive="#00f5d4" emissiveIntensity={2.5} />
+        <mesh position={[0.3, -0.1, 0]}>
+          <cylinderGeometry args={[0.15, 0.12, 0.4, 8]} />
+          <meshStandardMaterial color="#475569" metalness={0.9} roughness={0.1} />
         </mesh>
-        <mesh position={[0.2, -0.4, 0]}>
-          <cylinderGeometry args={[0.1, 0, 0.8, 8]} />
-          <meshBasicMaterial color="#00f5d4" transparent opacity={0.9} emissive="#00f5d4" emissiveIntensity={2.5} />
-        </mesh>
-        {/* Premium Glow effect */}
+        {/* Dual Jet Flames Container */}
+        <group ref={jetpackFlameRef} position={[0, -0.3, 0]}>
+          <mesh position={[-0.3, -0.3, 0]}>
+            <cylinderGeometry args={[0.1, 0, 0.6, 8]} />
+            <meshStandardMaterial color="#00f5d4" transparent opacity={0.8} emissive="#00f5d4" emissiveIntensity={2.0} />
+          </mesh>
+          <mesh position={[0.3, -0.3, 0]}>
+            <cylinderGeometry args={[0.1, 0, 0.6, 8]} />
+            <meshStandardMaterial color="#00f5d4" transparent opacity={0.8} emissive="#00f5d4" emissiveIntensity={2.0} />
+          </mesh>
+        </group>
+        {/* Soft Glow effect */}
         <mesh position={[0, -0.5, 0]}>
-           <sphereGeometry args={[0.4, 16, 16]} />
-           <meshBasicMaterial color="#00f5d4" transparent opacity={0.35} />
+           <sphereGeometry args={[0.5, 12, 12]} />
+           <meshBasicMaterial color="#00f5d4" transparent opacity={0.2} />
         </mesh>
-        {/* Premium Smoke Trails */}
-        <mesh position={[0, -0.8, 0.2]}>
-           <coneGeometry args={[0.5, 1.2, 8]} />
-           <meshBasicMaterial color="#ffffff" transparent opacity={0.15} />
+        {/* Tiny Smoke Trail */}
+        <mesh position={[0, -0.9, 0]}>
+           <coneGeometry args={[0.2, 0.8, 6]} />
+           <meshBasicMaterial color="#ffffff" transparent opacity={0.1} />
         </mesh>
       </group>
     </group>
@@ -861,7 +881,11 @@ const Track = memo(function Track({ playerRef, theme, gameOver }) {
     const pulse = 0.6 + Math.sin(state.clock.elapsedTime * 4) * 0.4;
     neonRefs.current.forEach(ref => {
       if (ref && ref.material) {
-        ref.material.emissiveIntensity = pulse;
+        if (ref.material.uniforms?.emissiveIntensity) {
+          ref.material.uniforms.emissiveIntensity.value = pulse;
+        } else {
+          ref.material.emissiveIntensity = pulse;
+        }
       }
     });
   });
@@ -1162,31 +1186,40 @@ const Coins = memo(function Coins({ playerRef, addScoreRef, addCoinsRef, playCoi
   }, []);
 
   const spawnSkyCoins = useCallback((pz) => {
-    const patternType = Math.floor(Math.random() * 4);
-    const lane = Math.floor(Math.random() * 3);
-    const count = 15;
-    const spacing = 3;
+    const rows = 15;
+    const currentSpeed = speedRef.current || 0.28;
+    const spacing = Math.max(3.0, 3.5 + (currentSpeed - 0.28) * 5); // Scale spacing slightly with speed
     let placed = 0;
+    
+    const patternType = Math.floor(Math.random() * 4);
+    const straightLane = Math.floor(Math.random() * 3);
 
-    for (let i = 0; i < coins.current.length && placed < count; i++) {
+    for (let i = 0; i < coins.current.length && placed < rows; i++) {
       const c = coins.current[i];
       if (c.inCluster) continue;
-      c.inCluster = true;
-      c.z = pz - 40 - (placed * spacing);
-      if (patternType === 0) { // Straight trail
-        c.x = LANES[lane];
-        c.y = SKY_LANE_Y;
-      } else if (patternType === 1) { // Curved arc
-        c.x = LANES[lane] + Math.sin(placed * 0.5) * 1.5;
-        c.y = SKY_LANE_Y + Math.sin(placed * 0.3) * 1.0;
-      } else if (patternType === 2) { // Zigzag
-        c.x = LANES[lane] + (placed % 4 < 2 ? 1.5 : -1.5);
-        c.y = SKY_LANE_Y;
-      } else { // Lane Shift
-        const targetLane = (lane + 1) % 3;
-        c.x = THREE.MathUtils.lerp(LANES[lane], LANES[targetLane], placed / (count - 1));
-        c.y = SKY_LANE_Y - Math.sin(placed / count * Math.PI) * 1.5;
+      
+      const row = placed;
+      let laneIdx = 1;
+      
+      if (patternType === 0) { // zigzag sky lanes
+        laneIdx = Math.floor(row / 3) % 3;
+      } else if (patternType === 1) { // horizontal trails
+        laneIdx = 1; 
+      } else if (patternType === 2) { // straight air paths
+        laneIdx = straightLane;
+      } else { // gentle curves
+        laneIdx = Math.round(1 + Math.sin(row * 0.5));
       }
+      
+      c.inCluster = true;
+      c.z = pz - 40 - (row * spacing);
+      c.x = LANES[laneIdx];
+      c.y = SKY_LANE_Y; // Align exactly with jetpack height
+      
+      if (placed === 0) {
+        console.log("Sky coin aligned:", c.y);
+      }
+      
       placed++;
     }
   }, []);
@@ -1823,9 +1856,9 @@ const POWERUP_SAFE_CLEARANCE = 30;
 const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, activateMysteryRef, activateJetpackRef, playPowerupRef, gameOver, obstaclesRef, speedRef }) {
   const ups = useRef(
     Array.from({ length: 2 }, (_, i) => ({
-      type: i === 0 ? "double" : "hover",
+      type: i === 0 ? "jetpack" : "double",
       x: LANES[Math.floor(Math.random() * 3)],
-      z: -(600 + Math.random() * 1800),
+      z: -(150 + Math.random() * 300),
       bob: 0,
       pattern: Math.floor(Math.random() * 4),
     }))
@@ -1859,6 +1892,7 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
 
     ups.current.forEach((u, idx) => {
       u.bob = Math.sin((state.clock.elapsedTime + idx * 0.7) * 2.2) * 0.12;
+      u.y = 0.9 + (u.bob || 0);
       const dx = Math.abs(u.x - playerRef.current.x);
       const dy = Math.abs(u.y - playerRef.current.y - 0.5);
       const dz = Math.abs(u.z - pz);
@@ -1870,10 +1904,10 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
         else if (u.type === "mystery") activateMysteryRef?.current && activateMysteryRef.current();
         else if (u.type === "jetpack") activateJetpackRef?.current && activateJetpackRef.current();
 
-        u.z = pz - (7000 + Math.random() * 10000);
+        u.z = pz - (600 + Math.random() * 1000);
         u.x = LANES[Math.floor(Math.random() * 3)];
         const rand = Math.random();
-        u.type = rand < 0.1 ? "mystery" : rand < 0.2 ? "jetpack" : rand < 0.6 ? "double" : "hover";
+        u.type = rand < 0.1 ? "mystery" : rand < 0.4 ? "jetpack" : rand < 0.7 ? "double" : "hover";
         u.pattern = Math.floor(Math.random() * 4);
         lastSpawnRef.current = now;
       }
@@ -1894,23 +1928,23 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
                 patternCooldownRef.current.afterObstacleSeq = true;
                 lastSpawnRef.current = now;
               } else {
-                u.z = pz - (5000 + Math.random() * 8000);
+                u.z = pz - (500 + Math.random() * 1000);
                 u.x = LANES[Math.floor(Math.random() * 3)];
               }
             } else {
-              u.z = pz - (5000 + Math.random() * 8000);
+              u.z = pz - (500 + Math.random() * 1000);
               u.x = LANES[Math.floor(Math.random() * 3)];
             }
           } else {
-            u.z = pz - (5000 + Math.random() * 8000);
+            u.z = pz - (500 + Math.random() * 1000);
             u.x = LANES[Math.floor(Math.random() * 3)];
           }
         } else {
-          u.z = pz - (5000 + Math.random() * 8000);
+          u.z = pz - (500 + Math.random() * 1000);
           u.x = LANES[Math.floor(Math.random() * 3)];
         }
         const rand = Math.random();
-        u.type = rand < 0.1 ? "mystery" : rand < 0.2 ? "jetpack" : rand < 0.6 ? "double" : "hover";
+        u.type = rand < 0.1 ? "mystery" : rand < 0.4 ? "jetpack" : rand < 0.7 ? "double" : "hover";
         u.pattern = Math.floor(Math.random() * 4);
       }
 
@@ -1967,11 +2001,11 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
       return (
         <group key={i} ref={(el) => (groupRefs.current[i] = el)} position={[u.x, y, u.z]}>
           <mesh>
-            <boxGeometry args={[0.4, 0.5, 0.2]} />
-            <meshStandardMaterial color="#475569" emissive="#475569" emissiveIntensity={0.5} />
+            <boxGeometry args={[0.5, 0.6, 0.3]} />
+            <meshStandardMaterial color="#00f5d4" emissive="#00f5d4" emissiveIntensity={0.8} />
           </mesh>
-          <mesh position={[0, -0.3, 0]}>
-            <sphereGeometry args={[0.1, 8, 8]} />
+          <mesh position={[0, -0.35, 0]}>
+            <sphereGeometry args={[0.15, 8, 8]} />
             <meshBasicMaterial color="#f97316" />
           </mesh>
         </group>
@@ -2009,7 +2043,8 @@ const SpeedLines = memo(function SpeedLines({ playerRef, speedRef, gameOver }) {
       if (r) {
         r.position.set(l.x, l.y, l.z);
         r.scale.z = l.len + speed * 0.4;
-        r.material.opacity = vis;
+        if (r.material.uniforms?.opacity) r.material.uniforms.opacity.value = vis;
+        else r.material.opacity = vis;
       }
     });
   });
@@ -2078,7 +2113,9 @@ const RunnerFX = memo(function RunnerFX({ playerRef, speedRef, crashSignal, game
         r.position.set(p.x, p.y, p.z);
         const s = 0.08 + p.life * 0.16;
         r.scale.setScalar(Math.max(0.03, s));
-        r.material.opacity = Math.max(0, p.life * 0.36);
+        const op = Math.max(0, p.life * 0.36);
+        if (r.material.uniforms?.opacity) r.material.uniforms.opacity.value = op;
+        else r.material.opacity = op;
       }
     });
 
@@ -2109,7 +2146,9 @@ const RunnerFX = memo(function RunnerFX({ playerRef, speedRef, crashSignal, game
       const r = sparkRefs.current[i];
       if (r) {
         r.position.set(p.x, p.y, p.z);
-        r.material.opacity = Math.max(0, p.life * 0.9);
+        const op = Math.max(0, p.life * 0.9);
+        if (r.material.uniforms?.opacity) r.material.uniforms.opacity.value = op;
+        else r.material.opacity = op;
       }
     });
   });
@@ -2801,6 +2840,18 @@ return (
         <div className={`hud-powerup ${hoverboardActive ? "active" : "inactive"}`} title="Hover">🛹</div>
         <div className={`hud-powerup ${jetpackActive ? "active" : "inactive"}`} title="Jetpack" style={jetpackActive ? { background: "linear-gradient(135deg,#f97316,#ea580c)" } : {}}>🚀</div>
       </div>
+
+      {jetpackActive && (
+        <div className="hud-fade bump" style={{
+          position: "absolute", top: 160, left: "50%", transform: "translateX(-50%)",
+          background: "linear-gradient(90deg, rgba(249,115,22,0.8), rgba(234,88,12,0.8))",
+          color: "#fff", padding: "8px 24px", borderRadius: "20px",
+          fontWeight: "bold", fontSize: "20px", letterSpacing: "2px",
+          boxShadow: "0 0 15px rgba(249,115,22,0.6)", zIndex: 1000
+        }}>
+          JETPACK ACTIVE
+        </div>
+      )}
 
       {combo >= 2 && (
         <div
@@ -3720,6 +3771,18 @@ function EventBanner({ event }) {
   );
 }
 
+// ---------------- RENDER LOOP PROTECTOR ----------------
+const RenderProtector = memo(function RenderProtector() {
+  useFrame(({ gl, scene, camera }) => {
+    try {
+      gl.render(scene, camera);
+    } catch (e) {
+      console.error("Render crash:", e);
+    }
+  }, 1);
+  return null;
+});
+
 export default function App() {
   const jumpRef = useRef(false);
   const jumpStartRef = useRef(0);
@@ -4100,7 +4163,9 @@ useEffect(() => {
     }
     jetpackRef.current = true;
     setJetpackActive(true);
-    console.log("Jetpack active");
+    console.log("Jetpack collected");
+    console.log("Jetpack active:", true);
+    console.log("Player entered sky mode");
     jetpackTimerRef.current = setTimeout(() => {
       jetpackRef.current = false;
       setJetpackActive(false);
@@ -4835,6 +4900,7 @@ useEffect(() => {
       )}
 
       <Canvas shadows style={{ width: "100vw", height: "100vh", background: THEMES[themeIndex].bg, transition: "background 1s ease" }}>
+        <RenderProtector />
         <fog attach="fog" args={[THEMES[themeIndex].fog, 30, 80]} />
         <ambientLight intensity={0.65} />
         <directionalLight 
