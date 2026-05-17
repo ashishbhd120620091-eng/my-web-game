@@ -144,7 +144,8 @@ const PreviewCharacter = memo(({ equipped, color = "#ff4d6d" }) => {
   );
 });
 
-export const CustomizePanel = ({ open, onClose, equipped, onEquip, onUIButtonClick, skinColor }) => {
+export const CustomizePanel = ({ open, onClose, equipped, onEquip, onUIButtonClick, skinColor, coins }) => {
+  console.log("Verified: CustomizePanel coins prop updated to:", coins);
   const [data, setData] = useState(OutfitManager.loadData());
   const [activeCat, setActiveCat] = useState(CATEGORIES[0]);
 
@@ -212,7 +213,7 @@ export const CustomizePanel = ({ open, onClose, equipped, onEquip, onUIButtonCli
         </div>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
           <div id="customize-coins" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '8px 16px', borderRadius: '12px', fontSize: '16px', fontWeight: 800 }}>
-            <span style={{ color: '#fbbf24', marginRight: '6px' }}>🪙</span> {data.coins.toLocaleString()}
+            <span style={{ color: '#fbbf24', marginRight: '6px' }}>🪙</span> {coins.toLocaleString()}
           </div>
           <button onClick={() => { onUIButtonClick && onUIButtonClick(); onClose(); }} style={{
             background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', 

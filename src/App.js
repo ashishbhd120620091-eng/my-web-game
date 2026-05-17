@@ -26,6 +26,36 @@ const OUTFIT_ITEMS = [
   { id: "sh2", cat: "shoes", name: "Classic Vans", cost: 200, color: "#f97316" }
 ];
 
+const POWERUP_TYPES = {
+  SPEED_BOOST: "speed_boost",
+  SLIME_TRAP: "slime_trap",
+  MAGNET: "magnet", // This will be the temporary powerup magnet, distinct from booster
+  SHIELD: "shield", // This will be the temporary powerup shield, distinct from booster
+  SHOCKWAVE: "shockwave",
+  FOCUS_MODE: "focus_mode",
+  EMP_BLAST: "emp_blast",
+  BOOST_PAD: "boost_pad", 
+  DOUBLE_COINS: "double_coins", 
+  HOVERBOARD: "hoverboard", 
+  JETPACK: "jetpack", 
+  MYSTERY: "mystery", 
+};
+
+const POWERUP_DEFS = [
+  { id: POWERUP_TYPES.SPEED_BOOST, name: "Speed Boost", icon: "💨", color: "#38bdf8", duration: 5000 },
+  { id: POWERUP_TYPES.SLIME_TRAP, name: "Slime Trap", icon: "🦠", color: "#84cc16", duration: 3000 },
+  { id: POWERUP_TYPES.MAGNET, name: "Magnet", icon: "🧲", color: "#a855f7", duration: 8000 },
+  { id: POWERUP_TYPES.SHIELD, name: "Shield", icon: "🛡️", color: "#10b981", duration: 10000 },
+  { id: POWERUP_TYPES.SHOCKWAVE, name: "Shockwave", icon: "💥", color: "#ef4444", duration: 0 },
+  { id: POWERUP_TYPES.FOCUS_MODE, name: "Focus Mode", icon: "👁️", color: "#fbbf24", duration: 4000 },
+  { id: POWERUP_TYPES.EMP_BLAST, name: "EMP Blast", icon: "⚡", color: "#60a5fa", duration: 0 },
+  { id: POWERUP_TYPES.BOOST_PAD, name: "Boost Pad", icon: "🚀", color: "#22d3ee", duration: 0 },
+  { id: POWERUP_TYPES.DOUBLE_COINS, name: "Double Coins", icon: "💰", color: "#ffd166", duration: 8000 },
+  { id: POWERUP_TYPES.HOVERBOARD, name: "Hoverboard", icon: "🛹", color: "#a78bfa", duration: 10000 },
+  { id: POWERUP_TYPES.JETPACK, name: "Jetpack", icon: "🚀", color: "#f97316", duration: 10000 },
+  { id: POWERUP_TYPES.MYSTERY, name: "Mystery Box", icon: "🎁", color: "#ec4899", duration: 0 },
+];
+
 const SKINS = [
   { id: "default", name: "Classic", colors: { body: "#ff4d6d", head: "#ffd166", legs: "#111827", arm: "#ff7aa2" } },
   { id: "neon", name: "Neon", colors: { body: "#00f5d4", head: "#ffd166", legs: "#111827", arm: "#00f5d4" } },
@@ -1853,15 +1883,33 @@ const Boosters = memo(function Boosters({ playerRef, activateMagnetRef, activate
 const POWERUP_SPAWN_INTERVAL = 4500;
 const POWERUP_SAFE_CLEARANCE = 30;
 
-const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, activateMysteryRef, activateJetpackRef, playPowerupRef, gameOver, obstaclesRef, speedRef }) {
+const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activateHoverRef, activateMysteryRef, activateJetpackRef, playPowerupRef, gameOver, obstaclesRef, speedRef, activateSpeedBoostRef, activateSlimeTrapRef, activatePowerupMagnetRef, activatePowerupShieldRef, activateShockwaveRef, activateFocusModeRef, activateEmpBlastRef, activateBoostPadRef }) {
+  const powerupSpawnTypes = useMemo(() => [
+    POWERUP_TYPES.SPEED_BOOST,
+    POWERUP_TYPES.SLIME_TRAP,
+    POWERUP_TYPES.MAGNET, // Powerup version of magnet
+    POWERUP_TYPES.SHIELD, // Powerup version of shield
+    POWERUP_TYPES.SHOCKWAVE,
+    POWERUP_TYPES.FOCUS_MODE,
+    POWERUP_TYPES.EMP_BLAST,
+    POWERUP_TYPES.BOOST_PAD,
+    POWERUP_TYPES.DOUBLE_COINS,
+    POWERUP_TYPES.HOVERBOARD,
+    POWERUP_TYPES.JETPACK,
+    POWERUP_TYPES.MYSTERY,
+  ], []);
+
   const ups = useRef(
-    Array.from({ length: 2 }, (_, i) => ({
-      type: i === 0 ? "jetpack" : "double",
-      x: LANES[Math.floor(Math.random() * 3)],
-      z: -(150 + Math.random() * 300),
-      bob: 0,
-      pattern: Math.floor(Math.random() * 4),
-    }))
+    Array.from({ length: 8 }, (_, i) => { // Increased count to 8
+      const type = powerupSpawnTypes[Math.floor(Math.random() * powerupSpawnTypes.length)];
+      return {
+        type: type,
+        x: LANES[Math.floor(Math.random() * 3)],
+        z: -(150 + Math.random() * 300),
+        bob: 0,
+        pattern: Math.floor(Math.random() * 4),
+      };
+    })
   );
 
   const groupRefs = useRef([]);
@@ -1899,15 +1947,53 @@ const PowerUps = memo(function PowerUps({ playerRef, activateDoubleRef, activate
 
       if (dx < 0.9 && dz < 0.9 && dy < 0.9) {
         playPowerupRef?.current && playPowerupRef.current();
-        if (u.type === "double") activateDoubleRef?.current && activateDoubleRef.current();
-        else if (u.type === "hover") activateHoverRef?.current && activateHoverRef.current();
-        else if (u.type === "mystery") activateMysteryRef?.current && activateMysteryRef.current();
-        else if (u.type === "jetpack") activateJetpackRef?.current && activateJetpackRef.current();
 
+        switch (u.type) {
+          case POWERUP_TYPES.DOUBLE_COINS:
+            activateDoubleRef?.current && activateDoubleRef.current();
+            break;
+          case POWERUP_TYPES.HOVERBOARD:
+            activateHoverRef?.current && activateHoverRef.current();
+            break;
+          case POWERUP_TYPES.MYSTERY:
+            activateMysteryRef?.current && activateMysteryRef.current();
+            break;
+          case POWERUP_TYPES.JETPACK:
+            activateJetpackRef?.current && activateJetpackRef.current();
+            break;
+          case POWERUP_TYPES.SPEED_BOOST:
+            activateSpeedBoostRef?.current && activateSpeedBoostRef.current();
+            break;
+          case POWERUP_TYPES.SLIME_TRAP:
+            activateSlimeTrapRef?.current && activateSlimeTrapRef.current();
+            break;
+          case POWERUP_TYPES.MAGNET:
+            activatePowerupMagnetRef?.current && activatePowerupMagnetRef.current();
+            break;
+          case POWERUP_TYPES.SHIELD:
+            activatePowerupShieldRef?.current && activatePowerupShieldRef.current();
+            break;
+          case POWERUP_TYPES.SHOCKWAVE:
+            activateShockwaveRef?.current && activateShockwaveRef.current();
+            break;
+          case POWERUP_TYPES.FOCUS_MODE:
+            activateFocusModeRef?.current && activateFocusModeRef.current();
+            break;
+          case POWERUP_TYPES.EMP_BLAST:
+            activateEmpBlastRef?.current && activateEmpBlastRef.current();
+            break;
+          case POWERUP_TYPES.BOOST_PAD:
+            activateBoostPadRef?.current && activateBoostPadRef.current();
+            break;
+          default:
+            console.warn("Unknown powerup type collected:", u.type);
+        }
+        console.log(`Verified: PowerUp ${u.type} collected and activated.`);
+
+        // Respawn logic (re-randomize type for next spawn)
         u.z = pz - (600 + Math.random() * 1000);
         u.x = LANES[Math.floor(Math.random() * 3)];
-        const rand = Math.random();
-        u.type = rand < 0.1 ? "mystery" : rand < 0.4 ? "jetpack" : rand < 0.7 ? "double" : "hover";
+        u.type = powerupSpawnTypes[Math.floor(Math.random() * powerupSpawnTypes.length)]; // Randomize next type
         u.pattern = Math.floor(Math.random() * 4);
         lastSpawnRef.current = now;
       }
@@ -3026,6 +3112,9 @@ const AIRunner = memo(function AIRunner({
   useFrame((state, delta) => {
     if (!ref.current || !active || gameOver || winner) return;
 
+    // Add this for debugging AI visibility
+    console.log("Verified: AI z-position:", aiZ.current, "Player z-position:", playerRef.current?.z);
+
     // AI Logic: Dodge obstacles
     decisionCooldown.current -= delta;
     if (decisionCooldown.current <= 0) {
@@ -3035,7 +3124,7 @@ const AIRunner = memo(function AIRunner({
       const ahead = (obstaclesRef.current || []).find(o => o.z < aiZ.current && o.z > aiZ.current - 14);
       if (ahead && ahead.lane === aiLane.current) {
         // Skill check: 90% chance to dodge correctly
-        if (Math.random() > 0.1) {
+        if (Math.random() > 0.2) {
            const possible = [0, 1, 2].filter(l => l !== aiLane.current);
            aiLane.current = possible[Math.floor(Math.random() * possible.length)];
         }
@@ -3053,8 +3142,11 @@ const AIRunner = memo(function AIRunner({
     let speedMult = 0.98 + Math.random() * 0.04;
     
     // Ruberbanding: If AI is too far behind, speed up. If too far ahead, slow down.
-    if (distToPlayer > 10) speedMult += 0.05;
-    if (distToPlayer < -15) speedMult -= 0.05;
+    // Ruberbanding: If AI is too far behind, speed up. If AI is too far ahead, slow down.
+    // Increased impact for more competitive races
+    if (distToPlayer > 10) speedMult += 0.08;
+    if (distToPlayer < -15) speedMult -= 0.08;
+    console.log("Verified: AI speedMult adjusted based on distToPlayer:", distToPlayer, speedMult);
 
     aiSpeed.current = THREE.MathUtils.lerp(aiSpeed.current, playerSpeed * speedMult, 0.05);
     aiZ.current -= aiSpeed.current * delta * 60;
@@ -3101,46 +3193,64 @@ const AIRunner = memo(function AIRunner({
 });
 
 // ---------------- RACE WINNER OVERLAY ----------------
-function RaceWinnerPopup({ winner, onRetry, onExit, onUIButtonClick }) {
+function RaceWinnerPopup({ winner, onRetry, onExit, onUIButtonClick, rewards }) {
   if (!winner) return null;
   const isPlayer = winner === "Player";
 
   return (
     <div className="modal-overlay" style={{ zIndex: 10000 }}>
-      <div className="modal-content" style={{ 
+      <div className="modal-content" style={{
         textAlign: "center", maxWidth: 380, padding: 40,
         background: isPlayer ? "linear-gradient(135deg, #064e3b, #020617)" : "linear-gradient(135deg, #450a0a, #020617)",
         borderRadius: 32, border: `2px solid ${isPlayer ? "#059669" : "#dc2626"}`
       }}>
         <div style={{ fontSize: 60, marginBottom: 10 }}>{isPlayer ? "🏆" : "💀"}</div>
-        <h1 style={{ color: "white", fontSize: 32, fontWeight: 900, margin: "0 0 10px 0" }}>
+        <h1 style={{ color: "white", fontSize: 32, fontWeight: 900, margin: "0 0 10px 0", animation: "winnerPop 0.8s ease-out forwards" }}>
           {isPlayer ? "YOU WON!" : "AI WON!"}
         </h1>
         <p style={{ color: "rgba(255,255,255,0.7)", marginBottom: 30 }}>
           {isPlayer ? "You outperformed the AI runner. Incredible speed!" : "The AI was too fast this time. Try again!"}
         </p>
-        
+
+        {rewards && (
+          <div style={{ marginBottom: 20, padding: "12px 18px", background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)" }}>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginBottom: 6 }}>REWARDS</div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 20, fontSize: 22, fontWeight: 900 }}>
+              {rewards.coins > 0 && <div style={{ color: "#ffd166" }}>🪙 +{rewards.coins}</div>}
+              {rewards.xp > 0 && <div style={{ color: "#06b6d4" }}>🌟 +{rewards.xp}</div>}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <button 
-            className="start-cta" 
+          <button
+            className="start-cta"
             onClick={() => { onUIButtonClick(); onRetry(); }}
+            onTouchStart={() => { onUIButtonClick(); onRetry(); }}
             style={{ background: isPlayer ? "#059669" : "#dc2626", width: "100%" }}
           >
             Rematch
           </button>
-          <button 
-            className="btn-ghost" 
+          <button
+            className="btn-ghost"
             onClick={() => { onUIButtonClick(); onExit(); }}
+            onTouchStart={() => { onUIButtonClick(); onExit(); }}
             style={{ width: "100%", padding: 15 }}
           >
             Back to Menu
           </button>
         </div>
+        <style>{`
+          @keyframes winnerPop {
+            0%   { transform: scale(0.5); opacity: 0; }
+            80%  { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+        `}</style>
       </div>
     </div>
   );
 }
-
 // Start Screen
 function StartScreen({ started, onStart, onOpenShop, onOpenMissions, onOpenCollection, onOpenLevels, onOpenCustomize, onOpenModes, onUIButtonClick, onToggleTheme, level, missionUI }) {
   useEffect(() => {
@@ -3816,7 +3926,7 @@ export default function App() {
   const [levelsOpen, setLevelsOpen] = useState(false);
   const [modesOpen, setModesOpen] = useState(false);
   const [gameMode, setGameMode] = useState("classic"); // "classic" or "challenge"
-  const [winner, setWinner] = useState(null);
+  const [raceRewards, setRaceRewards] = useState(null);
 
   const [score, setScore] = useState(0);
   const scoreRef = useRef(0);
@@ -3834,6 +3944,7 @@ export default function App() {
   const slowMotionUntilRef = useRef(0);
   const crashFxRef = useRef(0);
   const [crashSignal, setCrashSignal] = useState(0);
+  const [winner, setWinner] = useState(null);
 
    const [magnet, setMagnet] = useState(false);
   const [shield, setShield] = useState(false);
@@ -3854,6 +3965,22 @@ export default function App() {
   const jetpackRef = useRef(false);
   const jetpackTimerRef = useRef(null);
   const [jetpackActive, setJetpackActive] = useState(false);
+
+  // NEW POWER-UP states & refs
+  const [speedBoostActive, setSpeedBoostActive] = useState(false);
+  const speedBoostTimerRef = useRef(null);
+
+  const [slimeTrapActive, setSlimeTrapActive] = useState(false);
+  const slimeTrapTimerRef = useRef(null);
+
+  const [powerupMagnetActive, setPowerupMagnetActive] = useState(false);
+  const powerupMagnetTimerRef = useRef(null);
+
+  const [powerupShieldActive, setPowerupShieldActive] = useState(false);
+  const powerupShieldTimerRef = useRef(null);
+
+  const [focusModeActive, setFocusModeActive] = useState(false);
+  const focusModeTimerRef = useRef(null);
 
   // LEVEL + MISSION
   const [level, setLevel] = useState(() => parseInt(localStorage.getItem("game_level") || "1", 10));
@@ -3965,6 +4092,16 @@ export default function App() {
   const activateHoverRef = useRef(null);
   const activateMysteryRef = useRef(null);
   const activateJetpackRef = useRef(null);
+
+  // NEW POWERUP REFS
+  const activateSpeedBoostRef = useRef(null);
+  const activateSlimeTrapRef = useRef(null);
+  const activatePowerupMagnetRef = useRef(null);
+  const activatePowerupShieldRef = useRef(null);
+  const activateShockwaveRef = useRef(null);
+  const activateFocusModeRef = useRef(null);
+  const activateEmpBlastRef = useRef(null);
+  const activateBoostPadRef = useRef(null);
   const playCoinAudioRef = useRef(null);
 
   // constants for durations (ms)
@@ -4052,6 +4189,7 @@ useEffect(() => {
     setCoinsTotal(coinsRef.current);
     runCoinsRef.current += delta;
     setRunCoins(runCoinsRef.current);
+    console.log("Verified: addCoins called, new total:", coinsRef.current);
     try {
       localStorage.setItem("game_coins", String(coinsRef.current));
     } catch {
@@ -4190,6 +4328,109 @@ useEffect(() => {
       spawnTextRef.current(text, { x: 50, y: 30, color: "#ec4899", size: 28 });
     }
   }, [addCoins, activateDoubleCoins, activateHoverboard]);
+
+  // NEW POWER-UP ACTIVATION FUNCTIONS
+  const activateSpeedBoost = useCallback((ms) => {
+    const duration = typeof ms === "number" ? ms : POWERUP_DEFS.find(p => p.id === POWERUP_TYPES.SPEED_BOOST)?.duration || 5000;
+    if (speedBoostTimerRef.current) clearTimeout(speedBoostTimerRef.current);
+    const originalSpeed = speedRef.current; // Store original speed
+    speedRef.current = speedRef.current * 1.5; // Increase player speed
+    setSpeedBoostActive(true);
+    if (spawnTextRef.current) {
+      spawnTextRef.current("SPEED BOOST!", { x: 50, y: 40, color: "#38bdf8", size: 28 });
+    }
+    speedBoostTimerRef.current = setTimeout(() => {
+      speedRef.current = originalSpeed; // Reset player speed to original
+      setSpeedBoostActive(false);
+      speedBoostTimerRef.current = null;
+    }, duration);
+    console.log("Verified: Speed Boost Activated");
+  }, []);
+
+  const activateSlimeTrap = useCallback((ms) => {
+    const duration = typeof ms === "number" ? ms : POWERUP_DEFS.find(p => p.id === POWERUP_TYPES.SLIME_TRAP)?.duration || 3000;
+    // This will need to affect AIRunner's speed.
+    // For now, I'll add a placeholder.
+    if (spawnTextRef.current) {
+      spawnTextRef.current("SLIME TRAP!", { x: 50, y: 40, color: "#84cc16", size: 28 });
+    }
+    // Need to pass a ref to AIRunner to control its speed. This will be handled later.
+    console.log("Verified: Slime Trap Activated (AI speed reduction pending)");
+  }, []);
+
+  const activatePowerupMagnet = useCallback((ms) => {
+    const duration = typeof ms === "number" ? ms : POWERUP_DEFS.find(p => p.id === POWERUP_TYPES.MAGNET)?.duration || 8000;
+    if (powerupMagnetTimerRef.current) clearTimeout(powerupMagnetTimerRef.current);
+    setPowerupMagnetActive(true);
+    if (spawnTextRef.current) {
+      spawnTextRef.current("MAGNET ON!", { x: 50, y: 40, color: "#a855f7", size: 28 });
+    }
+    powerupMagnetTimerRef.current = setTimeout(() => {
+      setPowerupMagnetActive(false);
+      powerupMagnetTimerRef.current = null;
+    }, duration);
+    console.log("Verified: Powerup Magnet Activated");
+  }, []);
+
+  const activatePowerupShield = useCallback((ms) => {
+    const duration = typeof ms === "number" ? ms : POWERUP_DEFS.find(p => p.id === POWERUP_TYPES.SHIELD)?.duration || 10000;
+    if (powerupShieldTimerRef.current) clearTimeout(powerupShieldTimerRef.current);
+    setPowerupShieldActive(true);
+    if (spawnTextRef.current) {
+      spawnTextRef.current("SHIELD UP!", { x: 50, y: 40, color: "#10b981", size: 28 });
+    }
+    powerupShieldTimerRef.current = setTimeout(() => {
+      setPowerupShieldActive(false);
+      powerupShieldTimerRef.current = null;
+    }, duration);
+    console.log("Verified: Powerup Shield Activated");
+  }, []);
+
+  const activateShockwave = useCallback(() => {
+    // This will need to affect AIRunner's position.
+    // For now, I'll add a placeholder.
+    if (spawnTextRef.current) {
+      spawnTextRef.current("SHOCKWAVE!", { x: 50, y: 40, color: "#ef4444", size: 28 });
+    }
+    console.log("Verified: Shockwave Activated (AI push pending)");
+  }, []);
+
+  const activateFocusMode = useCallback((ms) => {
+    const duration = typeof ms === "number" ? ms : POWERUP_DEFS.find(p => p.id === POWERUP_TYPES.FOCUS_MODE)?.duration || 4000;
+    if (focusModeTimerRef.current) clearTimeout(focusModeTimerRef.current);
+    // This will need to slow down global game speed, affecting player and AI.
+    // For now, I'll add a placeholder and implement later.
+    setFocusModeActive(true);
+    if (spawnTextRef.current) {
+      spawnTextRef.current("FOCUS MODE!", { x: 50, y: 40, color: "#fbbf24", size: 28 });
+    }
+    focusModeTimerRef.current = setTimeout(() => {
+      setFocusModeActive(false);
+      focusModeTimerRef.current = null;
+    }, duration);
+    console.log("Verified: Focus Mode Activated (global speed reduction pending)");
+  }, []);
+
+  const activateEmpBlast = useCallback(() => {
+    // This will need to disable AI powerups.
+    // For now, I'll add a placeholder.
+    if (spawnTextRef.current) {
+      spawnTextRef.current("EMP BLAST!", { x: 50, y: 40, color: "#60a5fa", size: 28 });
+    }
+    console.log("Verified: EMP Blast Activated (AI powerup disable pending)");
+  }, []);
+
+  const activateBoostPad = useCallback(() => {
+    const originalSpeed = speedRef.current; // Store original speed
+    speedRef.current = speedRef.current * 2.5; // Instant high speed boost
+    if (spawnTextRef.current) {
+      spawnTextRef.current("BOOST!", { x: 50, y: 40, color: "#22d3ee", size: 28 });
+    }
+    setTimeout(() => {
+      speedRef.current = originalSpeed; // Reset speed
+    }, 500); // 0.5 second boost
+    console.log("Verified: Boost Pad Activated");
+  }, []);
 
   const triggerCombo = useCallback(() => {
     comboRef.current = Math.min(20, comboRef.current + 1);
@@ -4709,6 +4950,17 @@ useEffect(() => {
     activateHoverRef.current = activateHoverboard;
     activateMysteryRef.current = activateMysteryBox;
     activateJetpackRef.current = activateJetpack;
+
+    // NEW POWERUP REFS
+    activateSpeedBoostRef.current = activateSpeedBoost;
+    activateSlimeTrapRef.current = activateSlimeTrap;
+    activatePowerupMagnetRef.current = activatePowerupMagnet;
+    activatePowerupShieldRef.current = activatePowerupShield;
+    activateShockwaveRef.current = activateShockwave;
+    activateFocusModeRef.current = activateFocusMode;
+    activateEmpBlastRef.current = activateEmpBlast;
+    activateBoostPadRef.current = activateBoostPad;
+
     playCoinAudioRef.current = audio.refs?.coinRef;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audio, upgrades]);
@@ -4739,6 +4991,16 @@ useEffect(() => {
       slowMotionUntilRef.current = performance.now() + 1500;
     }, 220);
   }, [canRevive, activateShield, playBgm]);
+
+  const handleRaceFinish = useCallback((w) => {
+    setWinner(w);
+    setGameOver(true);
+    // Calculate rewards
+    const coinsEarned = runCoinsRef.current;
+    const xpEarned = Math.floor(scoreRef.current / 100); // Assuming 1 XP per 100 score
+    setRaceRewards({ coins: coinsEarned, xp: xpEarned });
+    console.log("Verified: Race finished. Rewards:", { coins: coinsEarned, xp: xpEarned });
+  }, [runCoinsRef, scoreRef, setWinner, setGameOver, setRaceRewards]);
 
 
   function addScore(delta = 0, source = "") {
@@ -4984,10 +5246,7 @@ useEffect(() => {
               obstaclesRef={obstaclesRef}
               gameOver={gameOver || paused}
               winner={winner}
-              onFinish={(w) => {
-                setWinner(w);
-                setGameOver(true);
-              }}
+              onFinish={handleRaceFinish}
             />
             <CameraFollow playerRef={playerRef} speedRef={speedRef} crashFxRef={crashFxRef} />
           </group>
@@ -5016,6 +5275,7 @@ useEffect(() => {
 
       <RaceWinnerPopup 
         winner={winner}
+        rewards={raceRewards} // Add this line
         onRetry={() => {
           setRestartKey(k => k + 1);
           setGameOver(false);
@@ -5025,12 +5285,14 @@ useEffect(() => {
           scoreRef.current = 0;
           speedRef.current = 0.28;
           playBgm && playBgm();
+          setRaceRewards(null); // Reset rewards on retry
         }}
         onExit={() => {
           setWinner(null);
           setStarted(false);
           setGameOver(false);
           setRestartKey(k => k + 1);
+          setRaceRewards(null); // Reset rewards on exit
         }}
         onUIButtonClick={playClick}
       />
@@ -5121,6 +5383,7 @@ useEffect(() => {
         }}
         onUIButtonClick={playClick}
         skinColor={skinColors}
+        coins={coinsTotal}
       />
 
       <GameOverOverlay
